@@ -1,0 +1,93 @@
+# (블로그 mail-test.yml을 옮김) 팀 Gmail: 변수 SMTP_USERNAME, Secret SMTP_PASSWORD(앱 비밀번호)
+# Gmail 앱 비밀번호(Secret SMTP_PASSWORD)가 맞는지 시험 메일 1통으로 확인한다.
+# 받는 사람은 보내는 계정 자신뿐이다. 비밀번호는 로그에 찍지 않는다.
+# 수동 실행(Actions → 메일 시험 발송 → Run workflow).
+# 참고: 2026-10-08 GitHub 러너(Azure)에서는 Gmail이 AUTH 직후 응답 없이 연결을 끊었다(데이터센터 IP 차단으로 추정). 그 경우 비밀번호 판정 전 단계다.
+name: 메일 시험 발송
+
+# 언제 도나: 수동 실행만. 배포와 상관없이 메일 비밀번호가 맞는지만 확인한다
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SMTP_USERNAME: ${{ vars.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+    steps:
+      # 1단계: Gmail SMTP 587·465 포트에 연결만 해 본다(러너 망 문제와 비밀번호 문제를 나누려고)
+      - name: 메일 서버 접속 점검(비밀번호 사용 안 함)
+        shell: python
+        run: |
+          import socket
+          for port in (587, 465):
+              for fam, *_, addr in socket.getaddrinfo("smtp.gmail.com", port, proto=socket.IPPROTO_TCP):
+                  try:
+                      with socket.create_connection(addr[:2], timeout=10) as c:
+                          c.settimeout(10)
+                          first = c.recv(100) if port == 587 else b"(TLS port)"
+                          print(f"{addr[0]}:{port} 연결됨 {first[:60]!r}")
+                  except Exception as e:
+                      print(f"{addr[0]}:{port} 실패 {type(e).__name__}: {e}")
+      # 2단계: 실제로 로그인해 자기 자신에게 메일 1통을 보낸다. 587이 안 되면 465로 다시 시도한다
+      - name: Gmail로 시험 메일 보내기
+        shell: python
+        run: |
+          import os, smtplib, sys, traceback
+          from datetime import datetime, timezone
+          from email.message import EmailMessage
+
+          user = os.environ["SMTP_USERNAME"]
+          # 배포(deploy.yml)와 같은 값으로 시험하려고 손대지 않는다
+          pw = os.environ.get("SMTP_PASSWORD", "")
+          if not pw:
+              print("::error::Secret SMTP_PASSWORD가 비어 있습니다")
+              sys.exit(1)
+          if any(c.isspace() for c in pw):
+              print("::warning::비밀번호에 공백이 있습니다. Gmail 앱 비밀번호는 공백 없이 16자로 넣어 주세요")
+          print(f"비밀번호 길이 {len(pw)}자 (Gmail 앱 비밀번호는 16자)")
+
+          msg = EmailMessage()
+          msg["From"] = f"TRACE <{user}>"
+          msg["To"] = user
+          msg["Subject"] = "TRACE 메일 시험 발송"
+          msg.set_content(f"GitHub Actions에서 보낸 시험 메일입니다. {datetime.now(timezone.utc).isoformat()}")
+
+          def via_587():
+              s = smtplib.SMTP("smtp.gmail.com", 587, timeout=30)
+              s.ehlo(); s.starttls(); s.ehlo()
+              return s
+
+          def via_465():
+              return smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30)
+
+          # 앱 설정은 587(STARTTLS). 러너 쪽 망 문제와 구분하려고 465(SSL)도 시도한다
+          for name, connect in (("587 STARTTLS", via_587), ("465 SSL", via_465)):
+              sent = False
+              try:
+                  with connect() as s:
+                      s.login(user, pw)
+                      s.send_message(msg)
+                      sent = True
+              except smtplib.SMTPAuthenticationError as e:
+                  print(f"::error::{name}: 로그인 실패(인증 오류 {e.smtp_code}). 앱 비밀번호가 틀렸거나 2단계 인증이 꺼져 있습니다")
+                  sys.exit(1)
+              except Exception as e:
+                  if sent:
+                      # 보낸 뒤 연결을 닫다 난 오류는 무시한다. 다른 포트로 다시 보내지 않는다
+                      print(f"{name}: 발송 후 연결 종료 중 오류(무시) {type(e).__name__}")
+                      print(f"성공({name}): {user} 로 시험 메일을 보냈습니다")
+                      sys.exit(0)
+                  print(f"{name}: 접속 실패 {type(e).__name__}: {e}")
+                  # 어느 단계(ehlo·starttls·login·send)에서 끊겼는지 보려고 호출 위치만 찍는다. 값은 찍히지 않는다
+                  traceback.print_exc(file=sys.stdout)
+                  continue
+              print(f"성공({name}): {user} 로 시험 메일을 보냈습니다")
+              sys.exit(0)
+          print("::error::두 포트 모두 실패했습니다. 로그인(AUTH) 중 끊겼다면 Gmail이 이 접속 위치를 막은 것이고 비밀번호가 틀렸다는 뜻은 아닙니다")
+          sys.exit(1)
