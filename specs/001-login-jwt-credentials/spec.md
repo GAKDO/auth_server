@@ -22,6 +22,7 @@
 - Q: 리프레시 토큰은 어디에 두나? → A: 설계서대로 Redis. 토큰 원문은 브라우저 쿠키에만 있고, 서버는 `trace:auth:refresh:{jti}`(jti = 원문의 SHA-256)에 계정 publicId를 7일 TTL로 둔다. 계정별 집합 `trace:auth:refresh:account:{accountId}`도 두어 AU2 재설정 때 한 번에 지운다. 쓰면 지우고 새로 준다(교체). 지운 토큰을 다시 내면 401 REFRESH_INVALID.
 - Q: 서명 키 형식은? → A: `JWT_PRIVATE_KEY`(trace-secrets) = PKCS#8 PEM을 `base64 -w0`로 한 줄로 만든 값. `kid`는 공개키의 RFC 7638 지문. 키가 없으면 `school` 프로필에서는 시작하지 않고, 로컬·테스트에서는 임시 키를 만들고 경고를 남긴다.
 - Q: 관리자·부스 초기 데이터는? → A: 시작할 때 환경 변수 `ADMIN_EMAIL`·`ADMIN_PASSWORD`, `BOOTH_CLIENT_ID`·`BOOTH_CLIENT_SECRET`(trace-secrets)로 없으면 만든다. 이미 있으면 건드리지 않는다(비밀번호를 덮어쓰지 않음). 값이 없으면 건너뛰고 경고만 남긴다.
+- Q: (11/2 후속) 시연용 고객 계정은? → A: decisions.md 11/2 "회원 화면은 C, 데모 계정은 A". 관리자와 같은 방식으로 `DEMO_CUSTOMER_EMAIL`·`DEMO_CUSTOMER_PASSWORD`(trace-secrets)가 있으면 시작할 때 CUSTOMER 계정을 ACTIVE·이메일 인증 완료로 만든다. 이미 있으면 건드리지 않고, 비밀번호는 로그에 남기지 않는다. 값이 없으면 만들지 않는다(시연용이라 경고 대신 안내).
 - Q: 페어링 코드 테이블에 rentalId가 없다(V1)? → A: AGENT JWT에 rentalId 클레임을 넣기로 했으므로(decisions.md 11/2) `V2__pairing_code_rental_id.sql`로 `rental_id` 컬럼을 더한다(더하는 변경).
 - Q: QR 링크 수명과 주소는? → A: 30분(설정 `trace.auth.capture-link-ttl`), 주소는 `${WEB_PUBLIC_URL}/capture?t=<토큰>`. 토큰은 32바이트 난수 base64url(43자), DB에는 SHA-256만.
 - Q: ID 형식은? → A: 헌법 1.1.0·contracts PR #6대로 DB 기본 키는 bigint로 밖에 내보내지 않고, 밖에 보이는 ID(계정 publicId, rentalId·checkpointId, JWT `sub`·`rentals`·`jti`)는 NanoID 21자다. 페어링 코드에는 publicId가 없어 AGENT JWT의 `sub`는 checkpointId로 둔다. 부스 `sub`·`scope`는 clientId(boothId) 그대로.

@@ -38,7 +38,7 @@ class PairingServiceTest {
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     private final AuthProperties properties = new AuthProperties("trace", "", false, "trace:", "http://w",
             Duration.ofMinutes(15), Duration.ofDays(7), Duration.ofMinutes(30), Duration.ofHours(1),
-            Duration.ofMinutes(10), FIVE_MIN, Duration.ofMinutes(30), true, null, null);
+            Duration.ofMinutes(10), FIVE_MIN, Duration.ofMinutes(30), true, null, null, null);
     private final PairingService service = new PairingService(codes, tokens,
             new JwtIssuer(new SigningKeyProvider(properties), properties, clock), properties, clock);
 

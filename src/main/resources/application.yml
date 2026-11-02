@@ -57,6 +57,10 @@ trace:
     initial-booth:
       client-id: ${BOOTH_CLIENT_ID:}
       client-secret: ${BOOTH_CLIENT_SECRET:}
+    # 시연용 고객 계정(trace-secrets). 비어 있으면 만들지 않는다
+    demo-customer:
+      email: ${DEMO_CUSTOMER_EMAIL:}
+      password: ${DEMO_CUSTOMER_PASSWORD:}
 
 management:
   endpoints:
