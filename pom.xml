@@ -13,7 +13,7 @@
 
     <groupId>com.gakdo.trace</groupId>
     <artifactId>auth-server</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>auth-server</name>
     <description>TRACE auth-server: 회원가입·로그인·이메일 인증·자격 교환·QR 링크·페어링 코드·JWKS·봉인 영수증 메일</description>
 
