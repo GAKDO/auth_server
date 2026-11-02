@@ -31,6 +31,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      # 통합 테스트는 Docker가 없으면 건너뛰므로, CI에서는 Docker가 없을 때 초록이 되지 않게 먼저 확인한다
+      - name: Docker 확인
+        run: docker info
       # verify = 컴파일 → 테스트 → JaCoCo 커버리지 검사(pom.xml에 기준 40%)
       - name: 테스트 + 커버리지 기준 (줄 40%)
         run: ./mvnw -B -ntp verify

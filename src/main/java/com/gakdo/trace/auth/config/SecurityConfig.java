@@ -3,6 +3,7 @@ package com.gakdo.trace.auth.config;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +23,8 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +43,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public class SecurityConfig {
 
     static final String ROLE_CAPTURE = "ROLE_CAPTURE";
+    static final Set<String> PUBLIC_POSTS = Set.of("/api/v1/auth/login", "/api/v1/auth/refresh",
+            "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange");
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
@@ -49,8 +54,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/ping", "/.well-known/jwks.json",
                                 "/actuator/health/**", "/actuator/info").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh",
-                                "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange").permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLIC_POSTS.toArray(String[]::new)).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links/exchange").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links", "/api/v1/auth/pairing-codes")
                         .hasRole("ADMIN")
@@ -58,6 +62,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs
+                        .bearerTokenResolver(publicPathSkippingResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                         .authenticationEntryPoint((req, res, e) ->
                                 writeProblem(objectMapper, req, res, ErrorCode.UNAUTHENTICATED))
@@ -69,6 +74,13 @@ public class SecurityConfig {
                         .accessDeniedHandler((req, res, e) ->
                                 writeProblem(objectMapper, req, res, ErrorCode.FORBIDDEN)));
         return http.build();
+    }
+
+    /** 공개 POST 경로는 만료·깨진 Bearer가 붙어 와도 읽지 않는다. 읽으면 경로와 상관없이 401이 되어 리프레시 재발급이 막힌다. */
+    static BearerTokenResolver publicPathSkippingResolver() {
+        DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
+        return request -> HttpMethod.POST.matches(request.getMethod())
+                && PUBLIC_POSTS.contains(request.getRequestURI()) ? null : delegate.resolve(request);
     }
 
     @Bean
