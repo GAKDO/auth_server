@@ -9,9 +9,54 @@ spring:
   threads:
     virtual:
       enabled: true
+  datasource:
+    # DB trace 안에서 auth 스키마만 쓴다(헌법 II)
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:trace}?currentSchema=auth
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none   # 스키마는 Flyway만 바꾼다
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    schemas: auth
+    default-schema: auth
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:2}
+      password: ${REDIS_PASSWORD:}
 
 app:
   commit: ${APP_COMMIT:unknown}   # 이미지에 구운 커밋 SHA. /ping 응답에 실려 배포 확인에 쓴다
+
+trace:
+  auth:
+    issuer: trace
+    # PKCS#8 PEM을 base64 -w0로 한 줄로 만든 값(trace-secrets). 비어 있으면 school 프로필이 아닐 때만 임시 키를 만든다
+    jwt-private-key: ${JWT_PRIVATE_KEY:}
+    redis-key-prefix: ${REDIS_KEY_PREFIX:trace:}
+    web-public-url: ${WEB_PUBLIC_URL:http://localhost:8315}
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    capture-token-ttl: 30m
+    booth-token-ttl: 1h
+    agent-token-ttl: 10m
+    pairing-code-ttl: 5m
+    capture-link-ttl: 30m
+    cookie-secure: true
+    # 초기 데이터(trace-secrets). 비어 있으면 만들지 않고 경고만 남긴다
+    initial-admin:
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
+    initial-booth:
+      client-id: ${BOOTH_CLIENT_ID:}
+      client-secret: ${BOOTH_CLIENT_SECRET:}
 
 management:
   endpoints:
@@ -22,3 +67,11 @@ management:
     health:
       probes:
         enabled: true   # /actuator/health/liveness·readiness (쿠버네티스 프로브)
+---
+spring:
+  config:
+    activate:
+      on-profile: school
+trace:
+  auth:
+    require-configured-key: true   # 학교 클러스터에서는 JWT_PRIVATE_KEY가 없으면 시작하지 않는다
