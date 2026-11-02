@@ -185,6 +185,20 @@ class SecurityRulesTest {
                 .andExpect(jsonPath("$.keys[0].kid").value(keys.publicJwk().getKeyID()));
     }
 
+    @Test
+    @DisplayName("공개 경로는 만료된 Bearer가 붙어 와도 401 UNAUTHENTICATED가 아니라 도메인 결과를 낸다")
+    void publicEndpointsIgnoreStaleBearer() throws Exception {
+        Clock past = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), Clock.systemUTC().getZone());
+        String expired = new JwtIssuer(keys, properties, past)
+                .issue(TokenClaims.admin(NanoId.next(), TTL)).value();
+        given(loginService.refresh(any())).willThrow(new AuthException(ErrorCode.REFRESH_INVALID));
+        mvc.perform(post("/api/v1/auth/refresh").header("Authorization", "Bearer " + expired))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("REFRESH_INVALID"));
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + expired))
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     private String bearer(TokenClaims claims) {
         return "Bearer " + issuer.issue(claims).value();
     }
