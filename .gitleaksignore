@@ -1,0 +1,4 @@
+# gitleaks 오탐(테스트 코드, 실제 비밀 아님). 커밋 ae9da70의 테스트에 있던 PEM 머리글 문자열과 테스트용 비밀번호 문자열을 키로 봤다.
+# 다음 커밋에서 테스트는 값을 실행할 때 만들도록 고쳤고, 이력에 남은 두 건만 지문으로 제외한다.
+ae9da703b8390961ce435471887ad565f32c62a4:src/test/java/com/gakdo/trace/auth/token/SigningKeyProviderTest.java:private-key:24
+ae9da703b8390961ce435471887ad565f32c62a4:src/test/java/com/gakdo/trace/auth/AuthFlowIntegrationTest.java:generic-api-key:116

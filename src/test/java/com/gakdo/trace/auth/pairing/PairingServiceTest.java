@@ -1,0 +1,81 @@
+package com.gakdo.trace.auth.pairing;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import com.gakdo.trace.auth.common.domain.AuthException;
+import com.gakdo.trace.auth.common.domain.ErrorCode;
+import com.gakdo.trace.auth.common.infra.NanoId;
+import com.gakdo.trace.auth.common.infra.SecureTokens;
+import com.gakdo.trace.auth.common.infra.Sha256;
+import com.gakdo.trace.auth.config.AuthProperties;
+import com.gakdo.trace.auth.pairing.application.PairingService;
+import com.gakdo.trace.auth.pairing.domain.PairingCode;
+import com.gakdo.trace.auth.pairing.domain.PairingCodeRepository;
+import com.gakdo.trace.auth.token.application.JwtIssuer;
+import com.gakdo.trace.auth.token.infra.SigningKeyProvider;
+
+class PairingServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-11-12T00:00:00Z");
+    private static final Duration FIVE_MIN = Duration.ofMinutes(5);
+
+    private final PairingCodeRepository codes = mock(PairingCodeRepository.class);
+    private final SecureTokens tokens = mock(SecureTokens.class);
+    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final AuthProperties properties = new AuthProperties("trace", "", false, "trace:", "http://w",
+            Duration.ofMinutes(15), Duration.ofDays(7), Duration.ofMinutes(30), Duration.ofHours(1),
+            Duration.ofMinutes(10), FIVE_MIN, Duration.ofMinutes(30), true, null, null);
+    private final PairingService service = new PairingService(codes, tokens,
+            new JwtIssuer(new SigningKeyProvider(properties), properties, clock), properties, clock);
+
+    @Test
+    @DisplayName("페어링 코드는 5분 뒤 만료되고 같은 값의 유효한 코드가 있으면 다시 뽑는다")
+    void createRedrawsCollision() {
+        given(tokens.sixDigitCode()).willReturn("111111", "222222");
+        given(codes.existsByCodeHashAndUsedAtIsNullAndExpiresAtAfter(Sha256.hex("111111"), NOW)).willReturn(true);
+
+        PairingService.IssuedCode issued = service.create(NanoId.next(), NanoId.next());
+
+        assertThat(issued.code()).isEqualTo("222222");
+        assertThat(issued.expiresAt()).isEqualTo(NOW.plus(FIVE_MIN));
+    }
+
+    @Test
+    @DisplayName("없는 코드는 400, 만료된 코드는 410이다")
+    void exchangeFailures() {
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(any())).willReturn(Optional.empty());
+        assertThatThrownBy(() -> service.exchange("000000"))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.PAIRING_CODE_INVALID);
+
+        PairingCode expired = new PairingCode(NanoId.next(), NanoId.next(), Sha256.hex("123456"),
+                NOW.minusSeconds(1), NOW.minus(FIVE_MIN));
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("123456"))).willReturn(Optional.of(expired));
+        assertThatThrownBy(() -> service.exchange("123456"))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.PAIRING_CODE_EXPIRED);
+    }
+
+    @Test
+    @DisplayName("동시에 먼저 쓰인 코드(조건부 갱신 0건)는 410이다")
+    void exchangeRace() {
+        PairingCode code = new PairingCode(NanoId.next(), NanoId.next(), Sha256.hex("654321"), NOW.plus(FIVE_MIN),
+                NOW);
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("654321"))).willReturn(Optional.of(code));
+        given(codes.markUsed(any(), eq(NOW))).willReturn(0);
+        assertThatThrownBy(() -> service.exchange("654321"))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.PAIRING_CODE_EXPIRED);
+    }
+}
