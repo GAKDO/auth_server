@@ -6,6 +6,9 @@ main에 버전이 적힌 CHANGELOG가 올라가면 release.yml이 태그와 GitH
 
 ## [Unreleased]
 
+### 변경
+- 페어링 코드 발급 요청에 `deviceSerial`(필수, 렌탈 기기 등록 시리얼)을 받아 저장(Flyway V3)하고, AGENT JWT 클레임과 교환 응답에 `deviceSerial`을 넣음 (contracts auth-server 0.2.0, 11/2 결정)
+
 ## [0.1.0] - 2026-11-02
 
 **목표: 첫 클러스터 배포와 관리자 로그인**

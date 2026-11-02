@@ -9,7 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** auth.pairing_code. 6자리 코드의 SHA-256만 둔다. 5분 1회용. rental_id는 V2에서 더함. */
+/** auth.pairing_code. 6자리 코드의 SHA-256만 둔다. 5분 1회용. rental_id는 V2, device_serial은 V3에서 더함. */
 @Entity
 @Table(name = "pairing_code", schema = "auth")
 public class PairingCode {
@@ -23,6 +23,9 @@ public class PairingCode {
 
     @Column(name = "rental_id")
     private String rentalId;
+
+    @Column(name = "device_serial")
+    private String deviceSerial;
 
     @Column(name = "code_hash", columnDefinition = "char(64)")
     private String codeHash;
@@ -42,9 +45,10 @@ public class PairingCode {
     protected PairingCode() {
     }
 
-    public PairingCode(String rentalId, String checkpointId, String codeHash, Instant expiresAt, Instant now) {
+    public PairingCode(String rentalId, String checkpointId, String deviceSerial, String codeHash, Instant expiresAt, Instant now) {
         this.rentalId = rentalId;
         this.checkpointId = checkpointId;
+        this.deviceSerial = deviceSerial;
         this.codeHash = codeHash;
         this.expiresAt = expiresAt;
         this.createdAt = now;
@@ -66,6 +70,10 @@ public class PairingCode {
 
     public String getRentalId() {
         return rentalId;
+    }
+
+    public String getDeviceSerial() {
+        return deviceSerial;
     }
 
     public String getCodeHash() {

@@ -48,7 +48,8 @@ class SecurityRulesTest {
     private static final String RENTAL = NanoId.next();
     private static final String CHECKPOINT = NanoId.next();
     private static final String CREATE_BODY =
-            "{\"rentalId\":\"" + RENTAL + "\",\"checkpointId\":\"" + CHECKPOINT + "\"}";
+            "{\"rentalId\":\"" + RENTAL + "\",\"checkpointId\":\"" + CHECKPOINT
+                    + "\",\"deviceSerial\":\"C02TEST00001\"}";
 
     @Autowired
     MockMvc mvc;
@@ -107,7 +108,7 @@ class SecurityRulesTest {
         for (TokenClaims claims : List.of(
                 TokenClaims.capture(NanoId.next(), CHECKPOINT, RENTAL, TTL),
                 TokenClaims.booth("booth-1", TTL),
-                TokenClaims.agent(CHECKPOINT, RENTAL, TTL))) {
+                TokenClaims.agent(CHECKPOINT, RENTAL, "C02TEST00001", TTL))) {
             mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(claims)))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -123,7 +124,7 @@ class SecurityRulesTest {
                             .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
                     .andExpect(status().isForbidden());
         }
-        given(pairingService.create(RENTAL, CHECKPOINT))
+        given(pairingService.create(RENTAL, CHECKPOINT, "C02TEST00001"))
                 .willReturn(new PairingService.IssuedCode("123456", Instant.parse("2026-11-12T00:05:00Z")));
         mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization",
                                 bearer(TokenClaims.admin(NanoId.next(), TTL)))
@@ -131,6 +132,20 @@ class SecurityRulesTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("123456"))
                 .andExpect(jsonPath("$.expiresAt").value("2026-11-12T00:05:00Z"));
+    }
+
+    @Test
+    @DisplayName("페어링 코드 발급에 기기 시리얼이 없거나 비었거나 64자를 넘으면 400이다")
+    void pairingCodeNeedsDeviceSerial() throws Exception {
+        String admin = bearer(TokenClaims.admin(NanoId.next(), TTL));
+        String head = "{\"rentalId\":\"" + RENTAL + "\",\"checkpointId\":\"" + CHECKPOINT + "\"";
+        for (String body : List.of(head + "}", head + ",\"deviceSerial\":\" \"}",
+                head + ",\"deviceSerial\":\"" + "A".repeat(65) + "\"}")) {
+            mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization", admin)
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
     }
 
     @Test
@@ -151,7 +166,8 @@ class SecurityRulesTest {
         mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization",
                                 bearer(TokenClaims.admin(NanoId.next(), TTL)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"rentalId\":\"not-a-nanoid\",\"checkpointId\":\"" + CHECKPOINT + "\"}"))
+                        .content("{\"rentalId\":\"not-a-nanoid\",\"checkpointId\":\"" + CHECKPOINT
+                                + "\",\"deviceSerial\":\"C02TEST00001\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors[0].field").value("rentalId"));

@@ -48,7 +48,7 @@ class PairingServiceTest {
         given(tokens.sixDigitCode()).willReturn("111111", "222222");
         given(codes.existsByCodeHashAndUsedAtIsNullAndExpiresAtAfter(Sha256.hex("111111"), NOW)).willReturn(true);
 
-        PairingService.IssuedCode issued = service.create(NanoId.next(), NanoId.next());
+        PairingService.IssuedCode issued = service.create(NanoId.next(), NanoId.next(), "C02TEST00001");
 
         assertThat(issued.code()).isEqualTo("222222");
         assertThat(issued.expiresAt()).isEqualTo(NOW.plus(FIVE_MIN));
@@ -61,7 +61,7 @@ class PairingServiceTest {
         assertThatThrownBy(() -> service.exchange("000000"))
                 .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.PAIRING_CODE_INVALID);
 
-        PairingCode expired = new PairingCode(NanoId.next(), NanoId.next(), Sha256.hex("123456"),
+        PairingCode expired = new PairingCode(NanoId.next(), NanoId.next(), "C02TEST00001", Sha256.hex("123456"),
                 NOW.minusSeconds(1), NOW.minus(FIVE_MIN));
         given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("123456"))).willReturn(Optional.of(expired));
         assertThatThrownBy(() -> service.exchange("123456"))
@@ -71,11 +71,31 @@ class PairingServiceTest {
     @Test
     @DisplayName("동시에 먼저 쓰인 코드(조건부 갱신 0건)는 410이다")
     void exchangeRace() {
-        PairingCode code = new PairingCode(NanoId.next(), NanoId.next(), Sha256.hex("654321"), NOW.plus(FIVE_MIN),
-                NOW);
+        PairingCode code = new PairingCode(NanoId.next(), NanoId.next(), "C02TEST00001", Sha256.hex("654321"),
+                NOW.plus(FIVE_MIN), NOW);
         given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("654321"))).willReturn(Optional.of(code));
         given(codes.markUsed(any(), eq(NOW))).willReturn(0);
         assertThatThrownBy(() -> service.exchange("654321"))
                 .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.PAIRING_CODE_EXPIRED);
+    }
+
+    @Test
+    @DisplayName("기기 시리얼 없이 만든 예전 코드는 400이고 시리얼이 있으면 AGENT 토큰에 같은 시리얼이 들어간다")
+    void exchangeCarriesDeviceSerial() {
+        PairingCode legacy = new PairingCode(NanoId.next(), NanoId.next(), null, Sha256.hex("777777"),
+                NOW.plus(FIVE_MIN), NOW);
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("777777"))).willReturn(Optional.of(legacy));
+        assertThatThrownBy(() -> service.exchange("777777"))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.PAIRING_CODE_INVALID);
+
+        PairingCode code = new PairingCode(NanoId.next(), NanoId.next(), "C02TEST00001", Sha256.hex("888888"),
+                NOW.plus(FIVE_MIN), NOW);
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("888888"))).willReturn(Optional.of(code));
+        given(codes.markUsed(any(), eq(NOW))).willReturn(1);
+        PairingService.AgentToken token = service.exchange("888888");
+        assertThat(token.deviceSerial()).isEqualTo("C02TEST00001");
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(token.token().value().split("\\.")[1]),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(payload).contains("\"deviceSerial\":\"C02TEST00001\"").contains("\"role\":\"AGENT\"");
     }
 }
