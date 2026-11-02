@@ -39,7 +39,7 @@ public class PairingService {
     }
 
     @Transactional
-    public IssuedCode create(String rentalId, String checkpointId) {
+    public IssuedCode create(String rentalId, String checkpointId, String deviceSerial) {
         Instant now = clock.instant();
         for (int draw = 0; draw < MAX_DRAWS; draw++) {
             String code = tokens.sixDigitCode();
@@ -49,7 +49,7 @@ public class PairingService {
                 continue;
             }
             Instant expiresAt = now.plus(properties.pairingCodeTtl());
-            codes.save(new PairingCode(rentalId, checkpointId, hash, expiresAt, now));
+            codes.save(new PairingCode(rentalId, checkpointId, deviceSerial, hash, expiresAt, now));
             return new IssuedCode(code, expiresAt);
         }
         throw new IllegalStateException("겹치지 않는 페어링 코드를 뽑지 못했습니다");
@@ -60,20 +60,21 @@ public class PairingService {
         Instant now = clock.instant();
         PairingCode pairing = codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex(code))
                 .orElseThrow(() -> new AuthException(ErrorCode.PAIRING_CODE_INVALID));
-        if (pairing.getRentalId() == null) {
+        // V2·V3 전에 만든 코드는 렌탈·시리얼이 없어 토큰을 만들 수 없다(어차피 5분 뒤 만료)
+        if (pairing.getRentalId() == null || pairing.getDeviceSerial() == null) {
             throw new AuthException(ErrorCode.PAIRING_CODE_INVALID);
         }
         if (!pairing.isUsableAt(now) || codes.markUsed(pairing.getId(), now) != 1) {
             throw new AuthException(ErrorCode.PAIRING_CODE_EXPIRED);
         }
         IssuedToken token = jwtIssuer.issue(TokenClaims.agent(pairing.getCheckpointId(),
-                pairing.getRentalId(), properties.agentTokenTtl()));
-        return new AgentToken(token, pairing.getRentalId(), pairing.getCheckpointId());
+                pairing.getRentalId(), pairing.getDeviceSerial(), properties.agentTokenTtl()));
+        return new AgentToken(token, pairing.getRentalId(), pairing.getCheckpointId(), pairing.getDeviceSerial());
     }
 
     public record IssuedCode(String code, Instant expiresAt) {
     }
 
-    public record AgentToken(IssuedToken token, String rentalId, String checkpointId) {
+    public record AgentToken(IssuedToken token, String rentalId, String checkpointId, String deviceSerial) {
     }
 }
