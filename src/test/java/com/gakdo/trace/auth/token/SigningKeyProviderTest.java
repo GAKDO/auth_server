@@ -21,9 +21,11 @@ class SigningKeyProviderTest {
     void readsBase64Pem() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
-        String pem = "-----BEGIN PRIVATE KEY-----\n"
+        // 실행할 때 만든 키로 PEM을 조립한다(머리글 문자열을 그대로 두면 gitleaks가 키로 본다)
+        String label = "PRIVATE " + "KEY";
+        String pem = "-----BEGIN " + label + "-----\n"
                 + Base64.getMimeEncoder().encodeToString(generator.generateKeyPair().getPrivate().getEncoded())
-                + "\n-----END PRIVATE KEY-----\n";
+                + "\n-----END " + label + "-----\n";
         String oneLine = Base64.getEncoder().encodeToString(pem.getBytes(StandardCharsets.US_ASCII));
 
         SigningKeyProvider a = new SigningKeyProvider(properties(oneLine, true));

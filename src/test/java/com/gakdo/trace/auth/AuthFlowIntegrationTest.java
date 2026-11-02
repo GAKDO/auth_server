@@ -22,7 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -44,15 +45,24 @@ import jakarta.servlet.http.Cookie;
 /** AU1 수용 기준을 실제 PostgreSQL(Flyway auth 스키마)·Redis로 확인한다. */
 @AutoConfigureMockMvc
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
-@TestPropertySource(properties = {
-        "trace.auth.initial-admin.email=admin@trace.test",
-        "trace.auth.initial-admin.password=admin-pass-1234",
-        "trace.auth.initial-booth.client-id=booth-it",
-        "trace.auth.initial-booth.client-secret=booth-secret-1234",
-        "trace.auth.web-public-url=https://web.trace.test"})
 class AuthFlowIntegrationTest extends IntegrationTestBase {
 
-    private static final String PASSWORD = "customer-pass-1234";
+    // 비밀번호 모양의 문자열을 커밋에 두지 않으려고(gitleaks) 실행할 때마다 만든다
+    private static final String ADMIN_PASSWORD = NanoId.next();
+    // 같은 DB로 다시 돌려도 겹치지 않게 실행마다 새 관리자·부스를 만든다(초기 데이터는 없을 때만 생성)
+    private static final String ADMIN_EMAIL = "admin-" + NanoId.next().toLowerCase() + "@trace.test";
+    private static final String BOOTH_ID = "booth-" + NanoId.next();
+    private static final String BOOTH_SECRET = NanoId.next();
+    private static final String PASSWORD = NanoId.next();
+
+    @DynamicPropertySource
+    static void initialData(DynamicPropertyRegistry registry) {
+        registry.add("trace.auth.initial-admin.email", () -> ADMIN_EMAIL);
+        registry.add("trace.auth.initial-admin.password", () -> ADMIN_PASSWORD);
+        registry.add("trace.auth.initial-booth.client-id", () -> BOOTH_ID);
+        registry.add("trace.auth.initial-booth.client-secret", () -> BOOTH_SECRET);
+        registry.add("trace.auth.web-public-url", () -> "https://web.trace.test");
+    }
 
     @Autowired
     MockMvc mvc;
@@ -71,7 +81,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     @DisplayName("관리자 계정은 초기 데이터로 만들고 로그인하면 액세스 JWT와 리프레시 쿠키를 받는다")
     void adminLogin() throws Exception {
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"ADMIN@trace.test\",\"password\":\"admin-pass-1234\"}"))
+                        .content(body(Map.of("email", ADMIN_EMAIL.toUpperCase(), "password", ADMIN_PASSWORD))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("ADMIN"))
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
@@ -86,7 +96,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("리프레시로 다시 발급되고, 쓴 리프레시와 로그아웃한 리프레시는 401이다")
     void refreshRotationAndLogout() throws Exception {
-        MvcResult login = login("admin@trace.test", "admin-pass-1234");
+        MvcResult login = login(ADMIN_EMAIL, ADMIN_PASSWORD);
         Cookie first = login.getResponse().getCookie("trace_refresh");
         String access = token(login);
 
@@ -113,7 +123,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     void loginFailures() throws Exception {
         Account pending = customer(AccountStatus.PENDING);
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content(body(Map.of("email", pending.getEmail(), "password", "wrong-pass-1234"))))
+                        .content(body(Map.of("email", pending.getEmail(), "password", NanoId.next()))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
@@ -125,7 +135,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("페어링 코드는 SHA-256 해시만 저장하고 한 번만 AGENT JWT로 바뀌며 5분 뒤 만료된다")
     void pairingCode() throws Exception {
-        String admin = token(login("admin@trace.test", "admin-pass-1234"));
+        String admin = token(login(ADMIN_EMAIL, ADMIN_PASSWORD));
         String rentalId = NanoId.next();
         String checkpointId = NanoId.next();
 
@@ -163,17 +173,17 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     @DisplayName("부스 자격은 BOOTH JWT로 바뀌고 틀린 secret은 401이다")
     void boothToken() throws Exception {
         MvcResult ok = mvc.perform(post("/api/v1/auth/booth/token").contentType(MediaType.APPLICATION_JSON)
-                        .content(body(Map.of("clientId", "booth-it", "clientSecret", "booth-secret-1234"))))
+                        .content(body(Map.of("clientId", BOOTH_ID, "clientSecret", BOOTH_SECRET))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.boothId").value("booth-it"))
+                .andExpect(jsonPath("$.boothId").value(BOOTH_ID))
                 .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn();
         Jwt booth = jwtDecoder.decode(token(ok));
         assertThat(booth.getClaimAsString("role")).isEqualTo("BOOTH");
-        assertThat(booth.getClaimAsString("scope")).isEqualTo("booth-it");
+        assertThat(booth.getClaimAsString("scope")).isEqualTo(BOOTH_ID);
 
         mvc.perform(post("/api/v1/auth/booth/token").contentType(MediaType.APPLICATION_JSON)
-                        .content(body(Map.of("clientId", "booth-it", "clientSecret", "wrong"))))
+                        .content(body(Map.of("clientId", BOOTH_ID, "clientSecret", NanoId.next()))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("CLIENT_CREDENTIALS_INVALID"));
     }
@@ -181,7 +191,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("QR 교환은 그 시점만 쓰는 촬영 JWT를 주고 렌탈을 계정에 연결하며, 다른 계정에 연결된 렌탈은 409이다")
     void captureLink() throws Exception {
-        String admin = token(login("admin@trace.test", "admin-pass-1234"));
+        String admin = token(login(ADMIN_EMAIL, ADMIN_PASSWORD));
         String rentalId = NanoId.next();
         String checkpointId = NanoId.next();
         Account owner = customer(AccountStatus.ACTIVE);
@@ -228,7 +238,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("발급한 JWT는 JWKS 공개키로 검증된다")
     void jwks() throws Exception {
-        String access = token(login("admin@trace.test", "admin-pass-1234"));
+        String access = token(login(ADMIN_EMAIL, ADMIN_PASSWORD));
         String body = mvc.perform(get("/.well-known/jwks.json"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.keys[0].kty").value("RSA"))
