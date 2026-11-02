@@ -21,11 +21,16 @@ public record AuthProperties(
         Duration captureLinkTtl,
         boolean cookieSecure,
         InitialAdmin initialAdmin,
-        InitialBooth initialBooth) {
+        InitialBooth initialBooth,
+        DemoCustomer demoCustomer) {
 
     public record InitialAdmin(String email, String password) {
     }
 
     public record InitialBooth(String clientId, String clientSecret) {
+    }
+
+    /** 시연용 고객 계정(DEMO_CUSTOMER_EMAIL·DEMO_CUSTOMER_PASSWORD). 회원 화면(C)이 없어도 고객 흐름을 시연한다. */
+    public record DemoCustomer(String email, String password) {
     }
 }

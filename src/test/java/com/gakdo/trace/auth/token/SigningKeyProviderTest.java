@@ -54,6 +54,6 @@ class SigningKeyProviderTest {
     static AuthProperties properties(String key, boolean required) {
         Duration d = Duration.ofMinutes(5);
         return new AuthProperties("trace", key, required, "trace:", "http://localhost:8315", d, d, d, d, d, d, d,
-                true, null, null);
+                true, null, null, null);
     }
 }
