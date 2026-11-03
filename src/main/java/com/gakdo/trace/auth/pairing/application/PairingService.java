@@ -60,19 +60,20 @@ public class PairingService {
 
     @Transactional
     public AgentToken exchange(String code) {
-        // 조회 전에 시도를 실패로 먼저 잡는다(원자적). 막는 동안은 맞는 코드도 거절한다(대입 중 우연히 맞힌 코드를 받지 않으려고)
-        long blocked = failures.tryAcquire();
-        if (blocked > 0) {
-            throw new RateLimitedException(blocked);
+        // 조회 전에 시도를 원자적으로 잡는다. 막는 동안은 맞는 코드도 거절한다(대입 중 우연히 맞힌 코드를 받지 않으려고)
+        PairingFailureGuard.Attempt attempt = failures.tryAcquire();
+        if (attempt.blockedForSeconds() > 0) {
+            throw new RateLimitedException(attempt.blockedForSeconds());
         }
         Instant now = clock.instant();
         PairingCode pairing = codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex(code))
                 .orElse(null);
         if (pairing == null) {
+            failures.recordFailure(attempt);
             throw new AuthException(ErrorCode.PAIRING_CODE_INVALID);
         }
-        // 있는 코드였으니 추측이 아니다. 먼저 잡아 둔 실패를 되돌린다
-        failures.refund();
+        // 있는 코드였으니 추측이 아니다. 잡아 둔 시도를 같은 창에서 푼다
+        failures.refund(attempt);
         // V2·V3 전에 만든 코드는 렌탈·시리얼이 없어 토큰을 만들 수 없다(어차피 5분 뒤 만료)
         if (pairing.getRentalId() == null || pairing.getDeviceSerial() == null) {
             throw new AuthException(ErrorCode.PAIRING_CODE_INVALID);
