@@ -105,17 +105,25 @@ class PairingServiceTest {
     }
 
     @Test
-    @DisplayName("틀린 코드는 전역 실패 한도에 한 번 센다")
+    @DisplayName("틀린 코드는 조회 전에 잡은 실패를 그대로 두고, 있는 코드는 되돌린다")
     void wrongCodeCountsAsFailure() {
         given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("000000"))).willReturn(Optional.empty());
         assertThatThrownBy(() -> service.exchange("000000")).isInstanceOf(AuthException.class);
-        verify(failures).recordFailure();
+        verify(failures).tryAcquire();
+        verify(failures, never()).refund();
+
+        PairingCode code = new PairingCode(NanoId.next(), NanoId.next(), "C02TEST00001", Sha256.hex("888888"),
+                NOW.plus(FIVE_MIN), NOW);
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("888888"))).willReturn(Optional.of(code));
+        given(codes.markUsed(any(), eq(NOW))).willReturn(1);
+        service.exchange("888888");
+        verify(failures).refund();
     }
 
     @Test
     @DisplayName("전역 실패 한도로 막는 동안은 맞는 코드도 429와 남은 초로 거절하고 코드를 쓰지 않는다")
     void blockedExchangeIsRateLimited() {
-        given(failures.blockedForSeconds()).willReturn(42L);
+        given(failures.tryAcquire()).willReturn(42L);
 
         assertThatThrownBy(() -> service.exchange("888888"))
                 .isInstanceOfSatisfying(RateLimitedException.class, e -> {
@@ -123,5 +131,6 @@ class PairingServiceTest {
                     assertThat(e.retryAfterSeconds()).isEqualTo(42L);
                 });
         verify(codes, never()).markUsed(any(), any());
+        verify(codes, never()).findFirstByCodeHashOrderByCreatedAtDesc(any());
     }
 }
