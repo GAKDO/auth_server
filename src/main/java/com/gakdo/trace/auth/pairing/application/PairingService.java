@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.gakdo.trace.auth.common.domain.AuthException;
 import com.gakdo.trace.auth.common.domain.ErrorCode;
+import com.gakdo.trace.auth.common.domain.RateLimitedException;
 import com.gakdo.trace.auth.common.infra.SecureTokens;
 import com.gakdo.trace.auth.common.infra.Sha256;
 import com.gakdo.trace.auth.config.AuthProperties;
@@ -17,7 +18,7 @@ import com.gakdo.trace.auth.token.application.JwtIssuer;
 import com.gakdo.trace.auth.token.domain.IssuedToken;
 import com.gakdo.trace.auth.token.domain.TokenClaims;
 
-/** 진단 에이전트 페어링 코드 발급·교환(FR-AUTH-02). 코드는 5분 1회용이고 SHA-256만 저장한다. */
+/** 진단 에이전트 페어링 코드 발급·교환(FR-AUTH-02). 코드는 5분 1회용이고 SHA-256만 저장한다. 틀린 코드는 전역 실패 한도로 센다. */
 @Service
 public class PairingService {
 
@@ -28,9 +29,11 @@ public class PairingService {
     private final JwtIssuer jwtIssuer;
     private final AuthProperties properties;
     private final Clock clock;
+    private final PairingFailureGuard failures;
 
     public PairingService(PairingCodeRepository codes, SecureTokens tokens, JwtIssuer jwtIssuer,
-                          AuthProperties properties, Clock clock) {
+                          AuthProperties properties, Clock clock, PairingFailureGuard failures) {
+        this.failures = failures;
         this.codes = codes;
         this.tokens = tokens;
         this.jwtIssuer = jwtIssuer;
@@ -57,9 +60,18 @@ public class PairingService {
 
     @Transactional
     public AgentToken exchange(String code) {
+        // 막는 동안은 맞는 코드도 거절한다(대입 중 우연히 맞힌 코드를 받지 않으려고)
+        long blocked = failures.blockedForSeconds();
+        if (blocked > 0) {
+            throw new RateLimitedException(blocked);
+        }
         Instant now = clock.instant();
         PairingCode pairing = codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex(code))
-                .orElseThrow(() -> new AuthException(ErrorCode.PAIRING_CODE_INVALID));
+                .orElse(null);
+        if (pairing == null) {
+            failures.recordFailure();
+            throw new AuthException(ErrorCode.PAIRING_CODE_INVALID);
+        }
         // V2·V3 전에 만든 코드는 렌탈·시리얼이 없어 토큰을 만들 수 없다(어차피 5분 뒤 만료)
         if (pairing.getRentalId() == null || pairing.getDeviceSerial() == null) {
             throw new AuthException(ErrorCode.PAIRING_CODE_INVALID);
