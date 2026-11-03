@@ -66,8 +66,14 @@ public class PairingService {
             throw new RateLimitedException(attempt.blockedForSeconds());
         }
         Instant now = clock.instant();
-        PairingCode pairing = codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex(code))
-                .orElse(null);
+        PairingCode pairing;
+        try {
+            pairing = codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex(code)).orElse(null);
+        } catch (RuntimeException e) {
+            // 조회가 실패하면 추측인지 알 수 없으니 잡아 둔 시도를 풀고 그대로 던진다(pending이 창 끝까지 남지 않게)
+            failures.refund(attempt);
+            throw e;
+        }
         if (pairing == null) {
             failures.recordFailure(attempt);
             throw new AuthException(ErrorCode.PAIRING_CODE_INVALID);

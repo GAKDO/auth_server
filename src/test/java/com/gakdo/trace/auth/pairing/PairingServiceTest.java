@@ -138,4 +138,13 @@ class PairingServiceTest {
         verify(codes, never()).markUsed(any(), any());
         verify(codes, never()).findFirstByCodeHashOrderByCreatedAtDesc(any());
     }
+
+    @Test
+    @DisplayName("코드 조회가 예외를 던지면 잡아 둔 시도를 풀고 예외를 그대로 던진다")
+    void lookupErrorReleasesAttempt() {
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(any())).willThrow(new IllegalStateException("db down"));
+        assertThatThrownBy(() -> service.exchange("123123")).isInstanceOf(IllegalStateException.class);
+        verify(failures).refund(ATTEMPT);
+        verify(failures, never()).recordFailure(any());
+    }
 }
