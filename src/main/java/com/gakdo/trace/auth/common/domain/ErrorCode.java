@@ -15,7 +15,8 @@ public enum ErrorCode {
     RENTAL_LINKED_TO_OTHER(HttpStatus.CONFLICT, "다른 계정에 연결된 렌탈입니다"),
     CLIENT_CREDENTIALS_INVALID(HttpStatus.UNAUTHORIZED, "부스 자격이 맞지 않습니다"),
     PAIRING_CODE_INVALID(HttpStatus.BAD_REQUEST, "페어링 코드가 맞지 않습니다"),
-    PAIRING_CODE_EXPIRED(HttpStatus.GONE, "페어링 코드가 만료되었습니다");
+    PAIRING_CODE_EXPIRED(HttpStatus.GONE, "페어링 코드가 만료되었습니다"),
+    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "잠시 후 다시 시도해 주세요");
 
     private final HttpStatus status;
     private final String title;

@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -18,10 +20,12 @@ import org.junit.jupiter.api.Test;
 
 import com.gakdo.trace.auth.common.domain.AuthException;
 import com.gakdo.trace.auth.common.domain.ErrorCode;
+import com.gakdo.trace.auth.common.domain.RateLimitedException;
 import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.common.infra.SecureTokens;
 import com.gakdo.trace.auth.common.infra.Sha256;
 import com.gakdo.trace.auth.config.AuthProperties;
+import com.gakdo.trace.auth.pairing.application.PairingFailureGuard;
 import com.gakdo.trace.auth.pairing.application.PairingService;
 import com.gakdo.trace.auth.pairing.domain.PairingCode;
 import com.gakdo.trace.auth.pairing.domain.PairingCodeRepository;
@@ -39,8 +43,14 @@ class PairingServiceTest {
     private final AuthProperties properties = new AuthProperties("trace", "", false, "trace:", "http://w",
             Duration.ofMinutes(15), Duration.ofDays(7), Duration.ofMinutes(30), Duration.ofHours(1),
             Duration.ofMinutes(10), FIVE_MIN, Duration.ofMinutes(30), true, null, null, null);
+    private final PairingFailureGuard failures = mock(PairingFailureGuard.class);
     private final PairingService service = new PairingService(codes, tokens,
-            new JwtIssuer(new SigningKeyProvider(properties), properties, clock), properties, clock);
+            new JwtIssuer(new SigningKeyProvider(properties), properties, clock), properties, clock, failures);
+    private static final PairingFailureGuard.Attempt ATTEMPT = PairingFailureGuard.Attempt.allowed("w");
+
+    {
+        given(failures.tryAcquire()).willReturn(ATTEMPT);
+    }
 
     @Test
     @DisplayName("페어링 코드는 5분 뒤 만료되고 같은 값의 유효한 코드가 있으면 다시 뽑는다")
@@ -97,5 +107,44 @@ class PairingServiceTest {
         String payload = new String(java.util.Base64.getUrlDecoder().decode(token.token().value().split("\\.")[1]),
                 java.nio.charset.StandardCharsets.UTF_8);
         assertThat(payload).contains("\"deviceSerial\":\"C02TEST00001\"").contains("\"role\":\"AGENT\"");
+    }
+
+    @Test
+    @DisplayName("틀린 코드는 잡은 시도를 확인된 실패로 바꾸고, 있는 코드는 같은 시도를 푼다")
+    void wrongCodeCountsAsFailure() {
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("000000"))).willReturn(Optional.empty());
+        assertThatThrownBy(() -> service.exchange("000000")).isInstanceOf(AuthException.class);
+        verify(failures).recordFailure(ATTEMPT);
+        verify(failures, never()).refund(any());
+
+        PairingCode code = new PairingCode(NanoId.next(), NanoId.next(), "C02TEST00001", Sha256.hex("888888"),
+                NOW.plus(FIVE_MIN), NOW);
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(Sha256.hex("888888"))).willReturn(Optional.of(code));
+        given(codes.markUsed(any(), eq(NOW))).willReturn(1);
+        service.exchange("888888");
+        verify(failures).refund(ATTEMPT);
+    }
+
+    @Test
+    @DisplayName("전역 실패 한도로 막는 동안은 맞는 코드도 429와 남은 초로 거절하고 코드를 쓰지 않는다")
+    void blockedExchangeIsRateLimited() {
+        given(failures.tryAcquire()).willReturn(PairingFailureGuard.Attempt.rejected(42L));
+
+        assertThatThrownBy(() -> service.exchange("888888"))
+                .isInstanceOfSatisfying(RateLimitedException.class, e -> {
+                    assertThat(e.code()).isEqualTo(ErrorCode.RATE_LIMITED);
+                    assertThat(e.retryAfterSeconds()).isEqualTo(42L);
+                });
+        verify(codes, never()).markUsed(any(), any());
+        verify(codes, never()).findFirstByCodeHashOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    @DisplayName("코드 조회가 예외를 던지면 잡아 둔 시도를 풀고 예외를 그대로 던진다")
+    void lookupErrorReleasesAttempt() {
+        given(codes.findFirstByCodeHashOrderByCreatedAtDesc(any())).willThrow(new IllegalStateException("db down"));
+        assertThatThrownBy(() -> service.exchange("123123")).isInstanceOf(IllegalStateException.class);
+        verify(failures).refund(ATTEMPT);
+        verify(failures, never()).recordFailure(any());
     }
 }
