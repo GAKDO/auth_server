@@ -7,7 +7,6 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -49,16 +48,10 @@ public class ReceiptService {
     /** @return 새로 남겼으면 true, 이미 받은 시점이면 false */
     @Transactional
     public boolean record(SealedRecord sealed) {
-        if (receipts.existsByCheckpointId(sealed.checkpointId())) {
-            return false;
-        }
         Instant now = clock.instant();
-        try {
-            receipts.saveAndFlush(new SealReceipt(sealed.rentalId(), sealed.checkpointId(), sealed.checkpointType(),
-                    sealed.payloadHash(), sealed.sealedAt(), now));
-        } catch (DataIntegrityViolationException e) {
-            // 같은 이벤트가 동시에 두 번 왔다(checkpoint_id UNIQUE). 먼저 들어간 쪽이 보낸다
-            return false;
+        if (receipts.insertIfAbsent(sealed.rentalId(), sealed.checkpointId(), sealed.checkpointType(),
+                sealed.payloadHash(), sealed.sealedAt(), now) == 0) {
+            return false; // 이미 받은 시점(checkpoint_id UNIQUE). 먼저 넣은 쪽이 보낸다
         }
         rentalAccesses.findByRentalId(sealed.rentalId())
                 .ifPresent(access -> sendPending(access, now));
