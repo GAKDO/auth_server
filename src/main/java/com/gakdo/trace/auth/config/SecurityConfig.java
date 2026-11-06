@@ -44,7 +44,9 @@ public class SecurityConfig {
 
     static final String ROLE_CAPTURE = "ROLE_CAPTURE";
     static final Set<String> PUBLIC_POSTS = Set.of("/api/v1/auth/login", "/api/v1/auth/refresh",
-            "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange");
+            "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange",
+            "/api/v1/auth/signup", "/api/v1/auth/email/verify", "/api/v1/auth/email/resend",
+            "/api/v1/auth/password/reset-request", "/api/v1/auth/password/reset");
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
@@ -58,6 +60,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links/exchange").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links", "/api/v1/auth/pairing-codes")
                         .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/me").hasRole("CUSTOMER") // 탈퇴는 고객만
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").hasAnyRole("ADMIN", "CUSTOMER")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
