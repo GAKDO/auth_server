@@ -53,6 +53,8 @@ public class SmtpCodeMailer implements CodeMailer {
         }
         try {
             sender.send(message(to, purpose, code));
+            // 운영에서 발송 여부를 확인할 수 있게 성공도 남긴다(주소·코드는 남기지 않음)
+            log.info("{} 코드 메일을 SMTP 서버에 넘겼습니다", purpose);
         } catch (MailException e) {
             // 코드는 다시 받을 수 있으므로 요청은 실패시키지 않는다
             log.error("{} 코드 메일을 보내지 못했습니다: {}", purpose, e.getClass().getSimpleName());

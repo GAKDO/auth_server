@@ -58,6 +58,7 @@ public class SmtpReceiptMailer implements ReceiptMailer {
         }
         try {
             sender.send(message(to, name, receipt));
+            log.info("봉인 영수증 메일을 SMTP 서버에 넘겼습니다 rentalId={}", receipt.rentalId());
         } catch (MailException e) {
             log.error("봉인 영수증 메일을 보내지 못했습니다 rentalId={}: {}", receipt.rentalId(),
                     e.getClass().getSimpleName());
