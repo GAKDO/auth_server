@@ -9,6 +9,19 @@ spring:
   threads:
     virtual:
       enabled: true
+  # 봉인 영수증(trace.record.sealed)만 받는다. 주소·계정은 infra.env·trace-secrets
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false   # 계속 실패하면 다시 넣지 않고 trace.dlx로
+        retry:
+          enabled: true
+          max-attempts: 3
   datasource:
     # DB trace 안에서 auth 스키마만 쓴다(헌법 II)
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:trace}?currentSchema=auth
@@ -90,6 +103,8 @@ management:
   health:
     mail:
       enabled: false   # SMTP가 잠깐 안 돼도 프로브가 실패해 재시작되지 않게(메일 실패는 로그로 본다)
+    rabbit:
+      enabled: false   # 영수증은 나중에 다시 받으면 되므로 RabbitMQ가 잠깐 안 돼도 로그인 서버를 재시작하지 않게
   endpoint:
     health:
       probes:
