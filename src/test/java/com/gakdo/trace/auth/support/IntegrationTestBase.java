@@ -35,6 +35,8 @@ public abstract class IntegrationTestBase {
 
     @DynamicPropertySource
     static void infrastructure(DynamicPropertyRegistry registry) {
+        // RabbitMQ 없이 돈다. 봉인 영수증 테스트는 리스너의 handle()을 직접 부른다
+        registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
         if (LOCAL) {
             registry.add("spring.datasource.url", () -> "jdbc:postgresql://localhost:5432/trace_it?currentSchema=auth");
             registry.add("spring.datasource.username", () -> "postgres");
