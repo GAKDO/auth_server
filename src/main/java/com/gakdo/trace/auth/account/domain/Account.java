@@ -87,6 +87,30 @@ public class Account {
         return account;
     }
 
+    /** 메일 인증 코드가 맞으면 PENDING → ACTIVE. 이미 ACTIVE면 그대로 둔다. */
+    public void verifyEmail(Instant now) {
+        if (status == AccountStatus.PENDING) {
+            status = AccountStatus.ACTIVE;
+            emailVerifiedAt = now;
+            updatedAt = now;
+        }
+    }
+
+    public void changePassword(String newPasswordHash, Instant now) {
+        passwordHash = newPasswordHash;
+        updatedAt = now;
+    }
+
+    /** 탈퇴(FR-USR-04): 이메일·이름·비밀번호를 지우고 WITHDRAWN. 렌탈 연결(rental_access)은 계정 행에 남는다. */
+    public void withdraw(Instant now) {
+        email = null;
+        name = null;
+        passwordHash = null;
+        status = AccountStatus.WITHDRAWN;
+        withdrawnAt = now;
+        updatedAt = now;
+    }
+
     public static String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }

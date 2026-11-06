@@ -31,6 +31,20 @@ spring:
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:2}
       password: ${REDIS_PASSWORD:}
+  # 인증·재설정 코드 메일(팀 Gmail SMTP). 주소는 infra.env, 계정·앱 비밀번호는 trace-secrets(.env). 비어 있으면 보내지 않고 로그만 남긴다
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      # STARTTLS를 못 쓰면 평문으로 보내지 않고 실패한다
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 
 app:
   commit: ${APP_COMMIT:unknown}   # 이미지에 구운 커밋 SHA. /ping 응답에 실려 배포 확인에 쓴다
@@ -50,6 +64,12 @@ trace:
     pairing-code-ttl: 5m
     capture-link-ttl: 30m
     cookie-secure: true
+    # 이메일 인증·비밀번호 재설정 코드(설계서 "이메일 인증·비밀번호 재설정")
+    email-code:
+      ttl: 10m
+      max-attempts: 5
+      resend-interval: 60s
+      from: ${SMTP_FROM:${SMTP_USERNAME:}}
     # 초기 데이터(trace-secrets). 비어 있으면 만들지 않고 경고만 남긴다
     initial-admin:
       email: ${ADMIN_EMAIL:}
@@ -67,6 +87,9 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    mail:
+      enabled: false   # SMTP가 잠깐 안 돼도 프로브가 실패해 재시작되지 않게(메일 실패는 로그로 본다)
   endpoint:
     health:
       probes:
