@@ -1,8 +1,11 @@
 package com.gakdo.trace.auth.account.infra;
 
+import java.util.concurrent.Executor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
@@ -16,6 +19,7 @@ import com.gakdo.trace.auth.config.EmailCodeProperties;
 /**
  * 팀 Gmail SMTP로 코드 메일을 보낸다(Spring Mail). SMTP_HOST가 비어 있으면 보내지 않고 경고만 남긴다.
  * 로그에는 받는 주소·코드를 남기지 않는다(개인정보·비밀).
+ * 발송은 요청 스레드 밖(applicationTaskExecutor)에서 한다. 재설정 요청 응답 시간으로 계정 존재를 알 수 없게(CWE-203).
  */
 @Component
 public class SmtpCodeMailer implements CodeMailer {
@@ -25,16 +29,23 @@ public class SmtpCodeMailer implements CodeMailer {
     private final ObjectProvider<JavaMailSender> senders;
     private final String host;
     private final EmailCodeProperties properties;
+    private final Executor executor;
 
     public SmtpCodeMailer(ObjectProvider<JavaMailSender> senders, @Value("${spring.mail.host:}") String host,
-                          EmailCodeProperties properties) {
+                          EmailCodeProperties properties,
+                          @Qualifier("applicationTaskExecutor") Executor executor) {
         this.senders = senders;
         this.host = host;
         this.properties = properties;
+        this.executor = executor;
     }
 
     @Override
     public void send(String to, EmailTokenPurpose purpose, String code) {
+        executor.execute(() -> deliver(to, purpose, code));
+    }
+
+    void deliver(String to, EmailTokenPurpose purpose, String code) {
         JavaMailSender sender = senders.getIfAvailable();
         if (host == null || host.isBlank() || sender == null) {
             log.warn("SMTP 설정이 없어 {} 코드 메일을 보내지 않았습니다", purpose);

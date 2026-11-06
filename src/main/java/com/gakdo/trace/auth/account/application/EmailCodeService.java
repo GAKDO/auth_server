@@ -56,11 +56,14 @@ public class EmailCodeService {
      * 틀린 횟수가 남도록 호출하는 쪽은 CodeInvalidException에 롤백하지 않는다.
      */
     public void consume(Account account, EmailTokenPurpose purpose, String code) {
-        Instant now = clock.instant();
         EmailToken token = tokens.findFirstByAccountIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDescIdDesc(
                         account.getId(), purpose)
-                .filter(t -> t.usable(now))
                 .orElseThrow(() -> new AuthException(ErrorCode.CODE_EXPIRED));
+        // 잠금을 기다리는 동안 만료될 수 있으므로 시각은 잠근 뒤에 잰다
+        Instant now = clock.instant();
+        if (!token.usable(now)) {
+            throw new AuthException(ErrorCode.CODE_EXPIRED);
+        }
         if (!Sha256.hex(code).equals(token.getCodeHash())) {
             throw new CodeInvalidException(token.recordFailure(properties.maxAttempts(), now));
         }
