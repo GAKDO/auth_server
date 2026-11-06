@@ -1,7 +1,11 @@
 package com.gakdo.trace.auth.receipt.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -47,9 +51,19 @@ class SmtpReceiptMailerTest {
     @SuppressWarnings("unchecked")
     void skipsWithoutSmtp() {
         ObjectProvider<JavaMailSender> senders = mock(ObjectProvider.class);
+        JavaMailSender sender = mock(JavaMailSender.class);
+        when(senders.getIfAvailable()).thenReturn(sender);
         SmtpReceiptMailer mailer = new SmtpReceiptMailer(senders, "", new EmailCodeProperties(null, 0, null, null),
                 null, Runnable::run);
         mailer.send("renter@trace.test", null, new Receipt("r", "RET", "h", Instant.EPOCH));
+        verify(sender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    @DisplayName("시점 종류는 출고·수령·반납으로 적는다")
+    void labels() {
+        assertThat(SmtpReceiptMailer.label("OUT")).isEqualTo("출고");
+        assertThat(SmtpReceiptMailer.label("RCV")).isEqualTo("수령");
         assertThat(SmtpReceiptMailer.label("RET")).isEqualTo("반납");
     }
 }
