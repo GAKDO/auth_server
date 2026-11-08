@@ -67,6 +67,7 @@ class AccountLifecycleTest {
     void setUp() {
         given(accounts.existsByEmail(any())).willAnswer(i -> find(i.getArgument(0)).isPresent());
         given(accounts.findByEmail(any())).willAnswer(i -> find(i.getArgument(0)));
+        given(accounts.findByEmailForUpdate(any())).willAnswer(i -> find(i.getArgument(0)));
         given(accounts.findByPublicId(any())).willAnswer(i -> accountRows.stream()
                 .filter(a -> a.getPublicId().equals(i.getArgument(0))).findFirst());
         given(accounts.saveAndFlush(any())).willAnswer(i -> {

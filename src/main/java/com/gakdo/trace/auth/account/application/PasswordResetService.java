@@ -56,7 +56,8 @@ public class PasswordResetService {
         if (resendGuard.tryAcquire(EmailTokenPurpose.RESET, normalized) > 0) {
             return;
         }
-        accounts.findByEmail(normalized)
+        // 계정 행 잠금: Redis가 안 될 때 병렬 요청이 같은 개수를 읽고 상한을 넘기지 않게 한다
+        accounts.findByEmailForUpdate(normalized)
                 .filter(a -> a.getStatus() == AccountStatus.ACTIVE)
                 .filter(a -> tokens.countByAccountIdAndPurposeAndCreatedAtAfter(
                         a.getId(), EmailTokenPurpose.RESET, clock.instant().minus(WINDOW)) < MAX_CODES_PER_DAY)
