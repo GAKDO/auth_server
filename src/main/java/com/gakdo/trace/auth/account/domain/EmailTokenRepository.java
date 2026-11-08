@@ -1,5 +1,6 @@
 package com.gakdo.trace.auth.account.domain;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,4 +20,7 @@ public interface EmailTokenRepository extends JpaRepository<EmailToken, Long> {
             Long accountId, EmailTokenPurpose purpose);
 
     List<EmailToken> findByAccountIdAndPurposeAndUsedAtIsNull(Long accountId, EmailTokenPurpose purpose);
+
+    /** 그 계정·용도로 since 뒤에 만든 코드 수(쓴 것·폐기한 것 포함). 재설정 코드 발급 횟수 상한에 쓴다. */
+    long countByAccountIdAndPurposeAndCreatedAtAfter(Long accountId, EmailTokenPurpose purpose, Instant since);
 }
