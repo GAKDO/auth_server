@@ -94,7 +94,7 @@ class AccountLifecycleTest {
 
         EmailCodeService codes = new EmailCodeService(tokens, secureTokens, mailer, props, clock);
         signup = new SignupService(accounts, encoder, codes, guard, clock);
-        reset = new PasswordResetService(accounts, encoder, codes, guard, refreshTokens, clock);
+        reset = new PasswordResetService(accounts, tokens, encoder, codes, guard, refreshTokens, clock);
         withdraw = new WithdrawService(accounts, encoder, refreshTokens, clock);
     }
 
@@ -174,6 +174,21 @@ class AccountLifecycleTest {
         Account account = accountRows.get(0);
         assertThat(account.getPasswordHash()).isEqualTo("new-pass-5678");
         verify(refreshTokens).revokeAll(account.getPublicId());
+    }
+
+    @Test
+    @DisplayName("재설정 코드는 계정당 하루 5번까지만 보내 코드를 계속 바꿔 가며 맞혀 볼 수 없다")
+    void resetCodesPerDayAreCapped() {
+        signup.signup("f@trace.test", "pass-1234", "바", true);
+        signup.verify("f@trace.test", "123456");
+        org.mockito.Mockito.clearInvocations(mailer);
+        given(tokens.countByAccountIdAndPurposeAndCreatedAtAfter(any(), any(), any()))
+                .willReturn((long) PasswordResetService.MAX_CODES_PER_DAY - 1, (long) PasswordResetService.MAX_CODES_PER_DAY);
+        reset.requestReset("f@trace.test");
+        reset.requestReset("f@trace.test");
+        verify(mailer, org.mockito.Mockito.times(1)).send(any(), any(), any());
+        verify(tokens, org.mockito.Mockito.times(2)).countByAccountIdAndPurposeAndCreatedAtAfter(accountRows.get(0).getId(),
+                EmailTokenPurpose.RESET, T0.minus(Duration.ofHours(24)));
     }
 
     @Test
