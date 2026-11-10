@@ -1,9 +1,6 @@
 package com.gakdo.trace.auth.account.api;
 
-import java.time.Duration;
-
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -16,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.gakdo.trace.auth.account.application.LoginResult;
 import com.gakdo.trace.auth.account.application.LoginService;
-import com.gakdo.trace.auth.config.AuthProperties;
 
 import jakarta.validation.Valid;
 
@@ -25,15 +21,14 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    static final String REFRESH_COOKIE = "trace_refresh";
-    private static final String COOKIE_PATH = "/api/v1/auth";
+    static final String REFRESH_COOKIE = RefreshCookies.NAME;
 
     private final LoginService loginService;
-    private final AuthProperties properties;
+    private final RefreshCookies cookies;
 
-    public AuthController(LoginService loginService, AuthProperties properties) {
+    public AuthController(LoginService loginService, RefreshCookies cookies) {
         this.loginService = loginService;
-        this.properties = properties;
+        this.cookies = cookies;
     }
 
     @PostMapping("/login")
@@ -51,7 +46,7 @@ public class AuthController {
     public ResponseEntity<Void> logout(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
         loginService.logout(refreshToken);
         return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie("", Duration.ZERO).toString())
+                .header(HttpHeaders.SET_COOKIE, cookies.clear().toString())
                 .build();
     }
 
@@ -62,18 +57,7 @@ public class AuthController {
 
     private ResponseEntity<TokenResponse> withRefreshCookie(LoginResult result) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE,
-                        refreshCookie(result.refreshToken(), properties.refreshTokenTtl()).toString())
+                .header(HttpHeaders.SET_COOKIE, cookies.issue(result.refreshToken()).toString())
                 .body(TokenResponse.from(result));
-    }
-
-    private ResponseCookie refreshCookie(String value, Duration maxAge) {
-        return ResponseCookie.from(REFRESH_COOKIE, value)
-                .httpOnly(true)
-                .secure(properties.cookieSecure())
-                .sameSite("Strict")
-                .path(COOKIE_PATH)
-                .maxAge(maxAge)
-                .build();
     }
 }
