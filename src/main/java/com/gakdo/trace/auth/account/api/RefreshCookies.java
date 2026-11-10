@@ -22,11 +22,6 @@ public class RefreshCookies {
         this.path = path;
     }
 
-    /** 리프레시 쿠키 Path. 소셜 로그인 state 쿠키는 이 아래 /oauth를 쓴다 */
-    public String path() {
-        return path;
-    }
-
     public ResponseCookie issue(String refreshToken) {
         return build(refreshToken, properties.refreshTokenTtl());
     }
