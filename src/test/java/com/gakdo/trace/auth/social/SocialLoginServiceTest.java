@@ -117,7 +117,40 @@ class SocialLoginServiceTest {
         assertThat(accountRows).hasSize(1);
         assertThat(pending.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(pending.getName()).isEqualTo("나");
+        assertThat(pending.getPasswordHash()).isEqualTo("random-unusable");
         assertThat(identityRows).singleElement().extracting(SocialIdentity::getAccountId).isEqualTo(pending.getId());
+    }
+
+    @Test
+    @DisplayName("이미 ACTIVE인 계정에 연결할 때는 원래 비밀번호를 그대로 둔다")
+    void activeAccountKeepsPassword() {
+        Account active = add(Account.customer(NanoId.next(), "me@trace.test", "hash", "나", AccountStatus.ACTIVE, NOW));
+
+        service.login(new SocialProfile(SocialProvider.GOOGLE, "g-1", "me@trace.test", "Google 이름"));
+
+        assertThat(active.getPasswordHash()).isEqualTo("hash");
+    }
+
+    @Test
+    @DisplayName("관리자 이메일로 소셜 로그인하면 연결하지 않고 거부한다")
+    void adminEmailIsRejected() {
+        add(Account.admin(NanoId.next(), "admin@trace.test", "hash", "관리자", NOW));
+
+        assertThatThrownBy(() -> service.login(new SocialProfile(SocialProvider.GOOGLE, "g-9", "admin@trace.test", "x")))
+                .isInstanceOf(SocialLoginException.class);
+        assertThat(identityRows).isEmpty();
+        verify(loginService, never()).issueFor(any());
+    }
+
+    @Test
+    @DisplayName("관리자 계정에 이미 붙은 연결이 있어도 소셜 로그인은 거부한다")
+    void linkedAdminIsRejected() {
+        Account admin = add(Account.admin(NanoId.next(), "admin@trace.test", "hash", "관리자", NOW));
+        identityRows.add(new SocialIdentity(admin.getId(), SocialProvider.GITHUB, "77", "admin@trace.test", NOW));
+
+        assertThatThrownBy(() -> service.login(new SocialProfile(SocialProvider.GITHUB, "77", "admin@trace.test", "x")))
+                .isInstanceOf(SocialLoginException.class);
+        verify(loginService, never()).issueFor(any());
     }
 
     @Test

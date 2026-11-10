@@ -11,6 +11,7 @@ import com.gakdo.trace.auth.account.application.LoginResult;
 import com.gakdo.trace.auth.account.application.LoginService;
 import com.gakdo.trace.auth.account.domain.Account;
 import com.gakdo.trace.auth.account.domain.AccountRepository;
+import com.gakdo.trace.auth.account.domain.AccountRole;
 import com.gakdo.trace.auth.account.domain.AccountStatus;
 import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.common.infra.SecureTokens;
@@ -51,6 +52,7 @@ public class SocialLoginService {
                 .flatMap(identity -> accounts.findById(identity.getAccountId()).map(a -> unlinkIfWithdrawn(identity, a)))
                 .orElse(null);
         if (linked != null) {
+            requireCustomer(linked);
             return loginService.issueFor(linked);
         }
         String email = Account.normalizeEmail(profile.email());
@@ -58,6 +60,12 @@ public class SocialLoginService {
             throw new SocialLoginException(SocialLoginError.EMAIL_REQUIRED, "인증된 이메일을 받지 못함");
         }
         Account account = accounts.findByEmail(email).orElseGet(() -> createCustomer(profile, email, now));
+        requireCustomer(account);
+        if (account.getStatus() == AccountStatus.PENDING) {
+            // 메일 인증 전 계정의 비밀번호는 이메일 주인이 정했다고 볼 수 없다(남이 먼저 가입했을 수 있음).
+            // 아무도 모르는 난수로 바꿔 그 비밀번호로는 로그인하지 못하게 한다. 비밀번호 재설정으로 새로 정할 수 있다.
+            account.changePassword(unusablePassword(), now);
+        }
         // 제공자가 인증한 이메일이므로 메일 인증 전(PENDING) 계정도 인증을 끝낸다
         account.verifyEmail(now);
         // 같은 제공자의 다른 사용자 번호가 이미 붙어 있으면(제공자 계정을 바꿈) 새 번호로 바꾼다
@@ -65,6 +73,17 @@ public class SocialLoginService {
         identities.flush();
         identities.save(new SocialIdentity(account.getId(), profile.provider(), profile.subject(), email, now));
         return loginService.issueFor(account);
+    }
+
+    /** 관리자 계정은 비밀번호 로그인만 쓴다. 소셜 로그인으로 관리자 권한이 열리지 않게 고객 계정만 받는다. */
+    private static void requireCustomer(Account account) {
+        if (account.getRole() != AccountRole.CUSTOMER) {
+            throw new SocialLoginException(SocialLoginError.PROVIDER_ERROR, "소셜 로그인은 고객 계정만 쓸 수 있음");
+        }
+    }
+
+    private String unusablePassword() {
+        return passwordEncoder.encode(secureTokens.opaqueToken());
     }
 
     /** 탈퇴한 계정에 붙은 연결은 지우고 새 계정으로 가입하게 한다. */
@@ -82,8 +101,7 @@ public class SocialLoginService {
      * 로그인 화면의 "처음 로그인하면 개인정보 수집·이용에 동의" 안내를 동의로 보고 지금 시각을 남긴다.
      */
     private Account createCustomer(SocialProfile profile, String email, Instant now) {
-        String unusablePassword = passwordEncoder.encode(secureTokens.opaqueToken());
-        Account account = Account.customer(NanoId.next(), email, unusablePassword, displayName(profile, email),
+        Account account = Account.customer(NanoId.next(), email, unusablePassword(), displayName(profile, email),
                 AccountStatus.ACTIVE, now);
         return accounts.saveAndFlush(account);
     }
