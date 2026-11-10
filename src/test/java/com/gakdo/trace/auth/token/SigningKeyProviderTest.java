@@ -38,7 +38,8 @@ class SigningKeyProviderTest {
     @Test
     @DisplayName("school 프로필에서 키가 없으면 시작하지 않고, 로컬에서는 임시 키를 만든다")
     void missingKey() {
-        assertThatThrownBy(() -> new SigningKeyProvider(properties("", true)))
+        var schoolWithoutKey = properties("", true);
+        assertThatThrownBy(() -> new SigningKeyProvider(schoolWithoutKey))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(new SigningKeyProvider(properties("", false)).publicKey()).isNotNull();
     }
@@ -47,7 +48,8 @@ class SigningKeyProviderTest {
     @DisplayName("PKCS#8이 아닌 값은 거부한다")
     void rejectsGarbage() {
         String notPem = Base64.getEncoder().encodeToString("hello".getBytes(StandardCharsets.US_ASCII));
-        assertThatThrownBy(() -> new SigningKeyProvider(properties(notPem, false)))
+        var garbage = properties(notPem, false);
+        assertThatThrownBy(() -> new SigningKeyProvider(garbage))
                 .isInstanceOf(IllegalStateException.class);
     }
 

@@ -8,6 +8,7 @@ import java.util.Arrays;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -43,7 +44,6 @@ import com.gakdo.trace.auth.social.domain.SocialProvider;
 public class SocialLoginController {
 
     static final String STATE_COOKIE = "trace_oauth_state";
-    private static final String STATE_COOKIE_PATH = "/api/v1/auth/oauth";
     private static final int NEXT_MAX = 512;
     private static final Logger log = LoggerFactory.getLogger(SocialLoginController.class);
 
@@ -53,16 +53,20 @@ public class SocialLoginController {
     private final SocialProviderClient providerClient;
     private final SocialLoginService loginService;
     private final RefreshCookies refreshCookies;
+    private final String stateCookiePath;
 
+    /** @param stateCookiePath state 쿠키 Path. 콜백 경로(/api/v1/auth/oauth/...)를 덮어야 해서 리프레시 쿠키 경로와 따로 둔다 */
     public SocialLoginController(SocialProperties socialProperties, AuthProperties authProperties,
                                  OAuthStateStore states, SocialProviderClient providerClient,
-                                 SocialLoginService loginService, RefreshCookies refreshCookies) {
+                                 SocialLoginService loginService, RefreshCookies refreshCookies,
+                                 @Value("${trace.auth.oauth-state-cookie-path:/api/v1/auth/oauth}") String stateCookiePath) {
         this.socialProperties = socialProperties;
         this.authProperties = authProperties;
         this.states = states;
         this.providerClient = providerClient;
         this.loginService = loginService;
         this.refreshCookies = refreshCookies;
+        this.stateCookiePath = stateCookiePath;
     }
 
     @GetMapping("/providers")
@@ -173,7 +177,7 @@ public class SocialLoginController {
                 .httpOnly(true)
                 .secure(authProperties.cookieSecure())
                 .sameSite("Lax")
-                .path(STATE_COOKIE_PATH)
+                .path(stateCookiePath)
                 .maxAge(maxAge)
                 .build();
     }

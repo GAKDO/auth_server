@@ -99,7 +99,8 @@ class SocialLoginServiceTest {
     @Test
     @DisplayName("인증된 이메일을 받지 못하면 가입시키지 않고 EMAIL_REQUIRED")
     void emailIsRequired() {
-        assertThatThrownBy(() -> service.login(new SocialProfile(SocialProvider.KAKAO, "9", null, "카카오")))
+        SocialProfile noEmail = new SocialProfile(SocialProvider.KAKAO, "9", null, "카카오");
+        assertThatThrownBy(() -> service.login(noEmail))
                 .isInstanceOf(SocialLoginException.class)
                 .extracting(e -> ((SocialLoginException) e).error())
                 .isEqualTo(SocialLoginError.EMAIL_REQUIRED);
@@ -136,7 +137,8 @@ class SocialLoginServiceTest {
     void adminEmailIsRejected() {
         add(Account.admin(NanoId.next(), "admin@trace.test", "hash", "관리자", NOW));
 
-        assertThatThrownBy(() -> service.login(new SocialProfile(SocialProvider.GOOGLE, "g-9", "admin@trace.test", "x")))
+        SocialProfile adminProfile = new SocialProfile(SocialProvider.GOOGLE, "g-9", "admin@trace.test", "x");
+        assertThatThrownBy(() -> service.login(adminProfile))
                 .isInstanceOf(SocialLoginException.class);
         assertThat(identityRows).isEmpty();
         verify(loginService, never()).issueFor(any());
@@ -148,7 +150,8 @@ class SocialLoginServiceTest {
         Account admin = add(Account.admin(NanoId.next(), "admin@trace.test", "hash", "관리자", NOW));
         identityRows.add(new SocialIdentity(admin.getId(), SocialProvider.GITHUB, "77", "admin@trace.test", NOW));
 
-        assertThatThrownBy(() -> service.login(new SocialProfile(SocialProvider.GITHUB, "77", "admin@trace.test", "x")))
+        SocialProfile linkedProfile = new SocialProfile(SocialProvider.GITHUB, "77", "admin@trace.test", "x");
+        assertThatThrownBy(() -> service.login(linkedProfile))
                 .isInstanceOf(SocialLoginException.class);
         verify(loginService, never()).issueFor(any());
     }

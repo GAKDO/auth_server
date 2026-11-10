@@ -13,6 +13,6 @@ public record SignupRequest(@NotBlank @Email @Size(max = 254) String email,
 
     @Override
     public String toString() {
-        return "SignupRequest[email=***, password=***, name=***, privacyAgreed=" + privacyAgreed + "]";
+        return "SignupRequest[가림: email, password, name; privacyAgreed " + privacyAgreed + "]";
     }
 }

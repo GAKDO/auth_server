@@ -29,7 +29,7 @@ public class BoothTokenService {
         this.passwordEncoder = passwordEncoder;
         this.jwtIssuer = jwtIssuer;
         this.properties = properties;
-        this.dummyHash = passwordEncoder.encode("timing-equalizer");
+        this.dummyHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
     }
 
     @Transactional(readOnly = true)

@@ -6,6 +6,6 @@ public record WithdrawRequest(@NotBlank String password) {
 
     @Override
     public String toString() {
-        return "WithdrawRequest[password=***]";
+        return "WithdrawRequest[가림: password]";
     }
 }

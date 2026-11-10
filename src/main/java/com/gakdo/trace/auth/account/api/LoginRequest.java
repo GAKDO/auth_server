@@ -8,6 +8,6 @@ public record LoginRequest(@NotBlank @Email @Size(max = 254) String email, @NotB
 
     @Override
     public String toString() {
-        return "LoginRequest[email=***, password=***]";
+        return "LoginRequest[가림: email, password]";
     }
 }

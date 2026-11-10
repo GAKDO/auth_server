@@ -2,6 +2,7 @@ package com.gakdo.trace.auth.account.api;
 
 import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -12,12 +13,13 @@ import com.gakdo.trace.auth.config.AuthProperties;
 public class RefreshCookies {
 
     public static final String NAME = "trace_refresh";
-    private static final String PATH = "/api/v1/auth";
-
     private final AuthProperties properties;
+    private final String path;
 
-    public RefreshCookies(AuthProperties properties) {
+    /** @param path 쿠키 Path. 기본은 인증 API 경로(/api/v1/auth)이고 trace.auth.cookie-path로 바꿀 수 있다 */
+    public RefreshCookies(AuthProperties properties, @Value("${trace.auth.cookie-path:/api/v1/auth}") String path) {
         this.properties = properties;
+        this.path = path;
     }
 
     public ResponseCookie issue(String refreshToken) {
@@ -33,7 +35,7 @@ public class RefreshCookies {
                 .httpOnly(true)
                 .secure(properties.cookieSecure())
                 .sameSite("Strict")
-                .path(PATH)
+                .path(path)
                 .maxAge(maxAge)
                 .build();
     }

@@ -63,4 +63,9 @@ public class SocialIdentity {
     public String getSubject() {
         return subject;
     }
+
+    /** 연결할 때 받은 공급자 이메일(확인된 경우만). 감사·문의 대응용으로 남긴다 */
+    public String getEmail() {
+        return email;
+    }
 }

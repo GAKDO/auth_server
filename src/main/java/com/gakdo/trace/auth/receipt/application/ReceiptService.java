@@ -47,7 +47,7 @@ public class ReceiptService {
 
     /** @return 새로 남겼으면 true, 이미 받은 시점이면 false */
     @Transactional
-    public boolean record(SealedRecord sealed) {
+    public boolean recordSealed(SealedRecord sealed) {
         Instant now = clock.instant();
         if (receipts.insertIfAbsent(sealed.rentalId(), sealed.checkpointId(), sealed.checkpointType(),
                 sealed.payloadHash(), sealed.sealedAt(), now) == 0) {

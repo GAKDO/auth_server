@@ -92,7 +92,7 @@ class AccountFlowIntegrationTest extends IntegrationTestBase {
         assertThat(row.get("email")).isNull();
         assertThat(row.get("name")).isNull();
         assertThat(row.get("password_hash")).isNull();
-        assertThat(row.get("status")).isEqualTo("WITHDRAWN");
+        assertThat(row).containsEntry("status", "WITHDRAWN");
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(login))
                 .andExpect(status().isUnauthorized());
     }
