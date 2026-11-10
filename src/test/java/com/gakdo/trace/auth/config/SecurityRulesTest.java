@@ -44,6 +44,9 @@ import com.gakdo.trace.auth.common.domain.RateLimitedException;
 import com.gakdo.trace.auth.common.domain.ErrorCode;
 import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.pairing.application.PairingService;
+import com.gakdo.trace.auth.social.application.OAuthStateStore;
+import com.gakdo.trace.auth.social.application.SocialLoginService;
+import com.gakdo.trace.auth.social.application.SocialProviderClient;
 import com.gakdo.trace.auth.support.WebSliceConfig;
 import com.gakdo.trace.auth.token.application.JwtIssuer;
 import com.gakdo.trace.auth.token.domain.TokenClaims;
@@ -84,6 +87,12 @@ class SecurityRulesTest {
     PasswordResetService passwordResetService;
     @MockitoBean
     WithdrawService withdrawService;
+    @MockitoBean
+    SocialLoginService socialLoginService;
+    @MockitoBean
+    OAuthStateStore oauthStateStore;
+    @MockitoBean
+    SocialProviderClient socialProviderClient;
 
     @Test
     @DisplayName("가입·인증·재발송·재설정은 토큰 없이 부르고, 만료된 Bearer가 붙어도 401이 아니다")
