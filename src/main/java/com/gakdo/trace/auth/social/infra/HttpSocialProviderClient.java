@@ -3,6 +3,7 @@ package com.gakdo.trace.auth.social.infra;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,7 @@ public class HttpSocialProviderClient implements SocialProviderClient {
     private final RestClient http;
     private final SocialProperties properties;
 
+    @Autowired // 테스트용 생성자가 하나 더 있어 스프링이 고를 생성자를 밝힌다
     public HttpSocialProviderClient(RestClient.Builder builder, SocialProperties properties) {
         HttpClient jdk = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(jdk);
