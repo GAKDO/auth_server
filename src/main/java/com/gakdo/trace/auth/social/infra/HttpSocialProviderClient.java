@@ -27,6 +27,8 @@ import com.gakdo.trace.auth.social.domain.SocialProvider;
 @Component
 public class HttpSocialProviderClient implements SocialProviderClient {
 
+    private static final String EMAIL = "email";
+
     private final RestClient http;
     private final SocialProperties properties;
 
@@ -109,7 +111,7 @@ public class HttpSocialProviderClient implements SocialProviderClient {
         JsonNode me = get("https://openidconnect.googleapis.com/v1/userinfo", token);
         boolean verified = me != null && me.path("email_verified").asBoolean(false);
         return new SocialProfile(SocialProvider.GOOGLE, required(me, "sub"),
-                verified ? text(me, "email") : null, text(me, "name"));
+                verified ? text(me, EMAIL) : null, text(me, "name"));
     }
 
     private SocialProfile github(String token) {
@@ -119,7 +121,7 @@ public class HttpSocialProviderClient implements SocialProviderClient {
         if (emails != null && emails.isArray()) {
             for (JsonNode e : emails) {
                 if (e.path("verified").asBoolean(false) && e.path("primary").asBoolean(false)) {
-                    email = text(e, "email");
+                    email = text(e, EMAIL);
                     break;
                 }
             }
@@ -135,7 +137,7 @@ public class HttpSocialProviderClient implements SocialProviderClient {
         boolean verified = account != null && account.path("is_email_verified").asBoolean(false)
                 && account.path("is_email_valid").asBoolean(false);
         return new SocialProfile(SocialProvider.KAKAO, required(me, "id"),
-                verified ? text(account, "email") : null,
+                verified ? text(account, EMAIL) : null,
                 account == null ? null : text(account.path("profile"), "nickname"));
     }
 
@@ -144,7 +146,7 @@ public class HttpSocialProviderClient implements SocialProviderClient {
         JsonNode r = me == null ? null : me.path("response");
         // 네이버는 본인 확인한 계정 이메일만 내준다(인증 여부 칸이 따로 없음)
         String name = text(r, "name");
-        return new SocialProfile(SocialProvider.NAVER, required(r, "id"), text(r, "email"),
+        return new SocialProfile(SocialProvider.NAVER, required(r, "id"), text(r, EMAIL),
                 name != null ? name : text(r, "nickname"));
     }
 

@@ -47,7 +47,7 @@ public class RecordSealedListener {
     /** @return 새 영수증을 남겼으면 true */
     public boolean handle(String body) {
         SealedRecord sealed = parse(body);
-        boolean created = receipts.record(sealed);
+        boolean created = receipts.recordSealed(sealed);
         log.info("봉인 이벤트 checkpointId={} type={}{}", sealed.checkpointId(), sealed.checkpointType(),
                 created ? "" : " (이미 받음)");
         return created;

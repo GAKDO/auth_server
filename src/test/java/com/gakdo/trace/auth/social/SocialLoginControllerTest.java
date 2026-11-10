@@ -129,8 +129,8 @@ class SocialLoginControllerTest {
 
         List<String> cookies = result.getResponse().getHeaders("Set-Cookie");
         assertThat(cookies).anySatisfy(c -> assertThat(c).startsWith("trace_refresh=refresh-1")
-                .contains("HttpOnly").contains("SameSite=Strict").contains("Path=/api/v1/auth"));
-        assertThat(cookies).anySatisfy(c -> assertThat(c).startsWith("trace_oauth_state=").contains("Max-Age=0"));
+                .contains("HttpOnly").contains("SameSite=Strict").contains("Path=/api/v1/auth"))
+                .anySatisfy(c -> assertThat(c).startsWith("trace_oauth_state=").contains("Max-Age=0"));
     }
 
     @Test

@@ -43,7 +43,6 @@ import com.gakdo.trace.auth.social.domain.SocialProvider;
 public class SocialLoginController {
 
     static final String STATE_COOKIE = "trace_oauth_state";
-    private static final String STATE_COOKIE_PATH = "/api/v1/auth/oauth";
     private static final int NEXT_MAX = 512;
     private static final Logger log = LoggerFactory.getLogger(SocialLoginController.class);
 
@@ -173,7 +172,7 @@ public class SocialLoginController {
                 .httpOnly(true)
                 .secure(authProperties.cookieSecure())
                 .sameSite("Lax")
-                .path(STATE_COOKIE_PATH)
+                .path(refreshCookies.path() + "/oauth")
                 .maxAge(maxAge)
                 .build();
     }

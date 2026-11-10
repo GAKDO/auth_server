@@ -42,6 +42,8 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration
 public class SecurityConfig {
 
+    private static final String CUSTOMER = "CUSTOMER";
+
     static final String ROLE_CAPTURE = "ROLE_CAPTURE";
     static final Set<String> PUBLIC_POSTS = Set.of("/api/v1/auth/login", "/api/v1/auth/refresh",
             "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange",
@@ -62,11 +64,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/oauth/providers",
                                 "/api/v1/auth/oauth/*/start", "/api/v1/auth/oauth/*/callback").permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POSTS.toArray(String[]::new)).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links/exchange").hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links/exchange").hasRole(CUSTOMER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links", "/api/v1/auth/pairing-codes")
                         .hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/me").hasRole("CUSTOMER") // 탈퇴는 고객만
-                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").hasAnyRole("ADMIN", "CUSTOMER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/me").hasRole(CUSTOMER) // 탈퇴는 고객만
+                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").hasAnyRole("ADMIN", CUSTOMER)
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs
@@ -120,7 +122,7 @@ public class SecurityConfig {
         if (role == null) {
             return List.of();
         }
-        if ("CUSTOMER".equals(role) && jwt.hasClaim("scope")) {
+        if (CUSTOMER.equals(role) && jwt.hasClaim("scope")) {
             return List.of(new SimpleGrantedAuthority(ROLE_CAPTURE));
         }
         return List.of(new SimpleGrantedAuthority("ROLE_" + role));

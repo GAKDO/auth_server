@@ -109,7 +109,9 @@ public class SocialLoginService {
     static String displayName(SocialProfile profile, String email) {
         String name = profile.name() == null ? "" : profile.name().trim();
         if (name.isEmpty()) {
-            name = email.substring(0, email.indexOf('@') > 0 ? email.indexOf('@') : email.length());
+            int at = email.indexOf('@');
+            // '@'가 맨 앞(0)이면 앞부분이 비므로 주소 전체를 이름으로 쓴다
+            name = email.substring(0, at > 0 ? at : email.length());
         }
         name = name.replaceAll("\\p{Cntrl}", "");
         return name.length() > NAME_MAX ? name.substring(0, NAME_MAX) : name;

@@ -44,11 +44,14 @@ class RecordSealedListenerTest {
     @DisplayName("형식이 깨진 이벤트는 다시 시도하지 않고 DLQ로 보낸다")
     void rejectsBrokenEvents() {
         assertThatThrownBy(() -> listener.parse("not json")).isInstanceOf(AmqpRejectAndDontRequeueException.class);
-        assertThatThrownBy(() -> listener.parse(EXAMPLE.replace("\"RCV\"", "\"XXX\"")))
+        String badType = EXAMPLE.replace("\"RCV\"", "\"XXX\"");
+        String upperHash = EXAMPLE.replace("b94d27b9", "B94D27B9");
+        String shortId = EXAMPLE.replace("Ws0HLv6QRbDILPWOcz5I2", "short");
+        assertThatThrownBy(() -> listener.parse(badType))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
-        assertThatThrownBy(() -> listener.parse(EXAMPLE.replace("b94d27b9", "B94D27B9")))
+        assertThatThrownBy(() -> listener.parse(upperHash))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
-        assertThatThrownBy(() -> listener.parse(EXAMPLE.replace("Ws0HLv6QRbDILPWOcz5I2", "short")))
+        assertThatThrownBy(() -> listener.parse(shortId))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
     }
 }

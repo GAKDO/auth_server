@@ -59,8 +59,7 @@ class DemoCustomerIntegrationTest extends IntegrationTestBase {
 
         Map<String, Object> row = jdbc.queryForMap(
                 "select role, status, email_verified_at from auth.account where email = ?", EMAIL);
-        assertThat(row.get("role")).isEqualTo("CUSTOMER");
-        assertThat(row.get("status")).isEqualTo("ACTIVE");
+        assertThat(row).containsEntry("role", "CUSTOMER").containsEntry("status", "ACTIVE");
         assertThat(row.get("email_verified_at")).isNotNull();
     }
 

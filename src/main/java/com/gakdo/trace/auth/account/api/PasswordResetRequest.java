@@ -11,6 +11,6 @@ public record PasswordResetRequest(@NotBlank @Email @Size(max = 254) String emai
 
     @Override
     public String toString() {
-        return "PasswordResetRequest[email=***, code=***, newPassword=***]";
+        return "PasswordResetRequest[가림: email, code, newPassword]";
     }
 }
