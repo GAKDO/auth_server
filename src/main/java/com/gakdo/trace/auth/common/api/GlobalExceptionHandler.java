@@ -5,7 +5,9 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,7 +15,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.gakdo.trace.auth.common.domain.AuthException;
+import com.gakdo.trace.auth.common.domain.CodeInvalidException;
 import com.gakdo.trace.auth.common.domain.ErrorCode;
+import com.gakdo.trace.auth.common.domain.RateLimitedException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -22,6 +26,22 @@ import jakarta.servlet.http.HttpServletRequest;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(RateLimitedException.class)
+    ResponseEntity<ProblemDetail> handleRateLimited(RateLimitedException e, HttpServletRequest request) {
+        return ResponseEntity.status(e.code().status())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds()))
+                .body(Problems.of(e.code(), null, request.getRequestURI()));
+    }
+
+    @ExceptionHandler(CodeInvalidException.class)
+    ProblemDetail handleCodeInvalid(CodeInvalidException e, HttpServletRequest request) {
+        int remaining = e.remainingAttempts();
+        String detail = remaining > 0 ? remaining + "번 더 시도할 수 있습니다." : "코드를 다시 받아 주세요.";
+        ProblemDetail problem = Problems.of(e.code(), detail, request.getRequestURI());
+        problem.setProperty("remainingAttempts", remaining);
+        return problem;
+    }
 
     @ExceptionHandler(AuthException.class)
     ProblemDetail handleAuth(AuthException e, HttpServletRequest request) {

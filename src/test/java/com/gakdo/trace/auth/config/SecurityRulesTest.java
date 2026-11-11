@@ -4,9 +4,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,14 +30,23 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.gakdo.trace.auth.account.application.LoginService;
 import com.gakdo.trace.auth.account.application.MeView;
+import com.gakdo.trace.auth.account.application.PasswordResetService;
+import com.gakdo.trace.auth.account.application.SignupResult;
+import com.gakdo.trace.auth.account.application.SignupService;
+import com.gakdo.trace.auth.account.application.WithdrawService;
 import com.gakdo.trace.auth.account.domain.AccountRole;
 import com.gakdo.trace.auth.account.domain.AccountStatus;
 import com.gakdo.trace.auth.booth.application.BoothTokenService;
 import com.gakdo.trace.auth.capture.application.CaptureLinkService;
 import com.gakdo.trace.auth.common.domain.AuthException;
+import com.gakdo.trace.auth.common.domain.CodeInvalidException;
+import com.gakdo.trace.auth.common.domain.RateLimitedException;
 import com.gakdo.trace.auth.common.domain.ErrorCode;
 import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.pairing.application.PairingService;
+import com.gakdo.trace.auth.social.application.OAuthStateStore;
+import com.gakdo.trace.auth.social.application.SocialLoginService;
+import com.gakdo.trace.auth.social.application.SocialProviderClient;
 import com.gakdo.trace.auth.support.WebSliceConfig;
 import com.gakdo.trace.auth.token.application.JwtIssuer;
 import com.gakdo.trace.auth.token.domain.TokenClaims;
@@ -48,7 +61,8 @@ class SecurityRulesTest {
     private static final String RENTAL = NanoId.next();
     private static final String CHECKPOINT = NanoId.next();
     private static final String CREATE_BODY =
-            "{\"rentalId\":\"" + RENTAL + "\",\"checkpointId\":\"" + CHECKPOINT + "\"}";
+            "{\"rentalId\":\"" + RENTAL + "\",\"checkpointId\":\"" + CHECKPOINT
+                    + "\",\"deviceSerial\":\"C02TEST00001\"}";
 
     @Autowired
     MockMvc mvc;
@@ -67,6 +81,82 @@ class SecurityRulesTest {
     PairingService pairingService;
     @MockitoBean
     CaptureLinkService captureLinkService;
+    @MockitoBean
+    SignupService signupService;
+    @MockitoBean
+    PasswordResetService passwordResetService;
+    @MockitoBean
+    WithdrawService withdrawService;
+    @MockitoBean
+    SocialLoginService socialLoginService;
+    @MockitoBean
+    OAuthStateStore oauthStateStore;
+    @MockitoBean
+    SocialProviderClient socialProviderClient;
+
+    @Test
+    @DisplayName("가입·인증·재발송·재설정은 토큰 없이 부르고, 만료된 Bearer가 붙어도 401이 아니다")
+    void accountPathsArePublic() throws Exception {
+        given(signupService.signup(anyString(), anyString(), anyString(), eq(true)))
+                .willReturn(new SignupResult(NanoId.next(), AccountStatus.PENDING));
+        mvc.perform(post("/api/v1/auth/signup").header("Authorization", "Bearer broken")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\",\"password\":\"pass-1234\",\"name\":\"홍길동\","
+                                + "\"privacyAgreed\":true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+        mvc.perform(post("/api/v1/auth/email/verify").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\",\"code\":\"123456\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/auth/email/resend").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\"}"))
+                .andExpect(status().isAccepted());
+        mvc.perform(post("/api/v1/auth/password/reset-request").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\"}"))
+                .andExpect(status().isAccepted());
+        mvc.perform(post("/api/v1/auth/password/reset").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\",\"code\":\"123456\",\"newPassword\":\"new-pass-5678\"}"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("인증 코드가 틀리면 400 CODE_INVALID와 남은 횟수, 60초 안 재발송은 429와 Retry-After다")
+    void codeProblems() throws Exception {
+        willThrow(new CodeInvalidException(4)).given(signupService).verify(anyString(), anyString());
+        mvc.perform(post("/api/v1/auth/email/verify").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\",\"code\":\"000000\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CODE_INVALID"))
+                .andExpect(jsonPath("$.remainingAttempts").value(4));
+        willThrow(new RateLimitedException(ErrorCode.RESEND_TOO_SOON, 42)).given(signupService).resend(anyString());
+        mvc.perform(post("/api/v1/auth/email/resend").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "42"))
+                .andExpect(jsonPath("$.code").value("RESEND_TOO_SOON"));
+        mvc.perform(post("/api/v1/auth/email/verify").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"r@trace.test\",\"code\":\"12ab\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("탈퇴는 CUSTOMER 일반 토큰만 하고 ADMIN·촬영 JWT는 403이다")
+    void withdrawIsCustomerOnly() throws Exception {
+        String body = "{\"password\":\"pass-1234\"}";
+        for (TokenClaims claims : List.of(TokenClaims.admin(NanoId.next(), TTL),
+                TokenClaims.capture(NanoId.next(), CHECKPOINT, RENTAL, TTL))) {
+            mvc.perform(delete("/api/v1/auth/me").header("Authorization", bearer(claims))
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isForbidden());
+        }
+        String accountId = NanoId.next();
+        mvc.perform(delete("/api/v1/auth/me").header("Authorization",
+                                bearer(TokenClaims.customer(accountId, List.of(), TTL)))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+        verify(withdrawService).withdraw(accountId, "pass-1234");
+    }
 
     @Test
     @DisplayName("만료된 액세스 토큰은 401이다")
@@ -107,7 +197,7 @@ class SecurityRulesTest {
         for (TokenClaims claims : List.of(
                 TokenClaims.capture(NanoId.next(), CHECKPOINT, RENTAL, TTL),
                 TokenClaims.booth("booth-1", TTL),
-                TokenClaims.agent(CHECKPOINT, RENTAL, TTL))) {
+                TokenClaims.agent(CHECKPOINT, RENTAL, "C02TEST00001", TTL))) {
             mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(claims)))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -123,7 +213,7 @@ class SecurityRulesTest {
                             .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
                     .andExpect(status().isForbidden());
         }
-        given(pairingService.create(RENTAL, CHECKPOINT))
+        given(pairingService.create(RENTAL, CHECKPOINT, "C02TEST00001"))
                 .willReturn(new PairingService.IssuedCode("123456", Instant.parse("2026-11-12T00:05:00Z")));
         mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization",
                                 bearer(TokenClaims.admin(NanoId.next(), TTL)))
@@ -131,6 +221,20 @@ class SecurityRulesTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("123456"))
                 .andExpect(jsonPath("$.expiresAt").value("2026-11-12T00:05:00Z"));
+    }
+
+    @Test
+    @DisplayName("페어링 코드 발급에 기기 시리얼이 없거나 비었거나 64자를 넘으면 400이다")
+    void pairingCodeNeedsDeviceSerial() throws Exception {
+        String admin = bearer(TokenClaims.admin(NanoId.next(), TTL));
+        String head = "{\"rentalId\":\"" + RENTAL + "\",\"checkpointId\":\"" + CHECKPOINT + "\"";
+        for (String body : List.of(head + "}", head + ",\"deviceSerial\":\" \"}",
+                head + ",\"deviceSerial\":\"" + "A".repeat(65) + "\"}")) {
+            mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization", admin)
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
     }
 
     @Test
@@ -151,7 +255,8 @@ class SecurityRulesTest {
         mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization",
                                 bearer(TokenClaims.admin(NanoId.next(), TTL)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"rentalId\":\"not-a-nanoid\",\"checkpointId\":\"" + CHECKPOINT + "\"}"))
+                        .content("{\"rentalId\":\"not-a-nanoid\",\"checkpointId\":\"" + CHECKPOINT
+                                + "\",\"deviceSerial\":\"C02TEST00001\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors[0].field").value("rentalId"));

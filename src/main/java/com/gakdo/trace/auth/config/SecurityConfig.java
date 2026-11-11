@@ -42,9 +42,15 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration
 public class SecurityConfig {
 
+    private static final String CUSTOMER = "CUSTOMER";
+
     static final String ROLE_CAPTURE = "ROLE_CAPTURE";
     static final Set<String> PUBLIC_POSTS = Set.of("/api/v1/auth/login", "/api/v1/auth/refresh",
-            "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange");
+            "/api/v1/auth/booth/token", "/api/v1/auth/pairing-codes/exchange",
+            "/api/v1/auth/signup", "/api/v1/auth/email/verify", "/api/v1/auth/email/resend",
+            "/api/v1/auth/password/reset-request", "/api/v1/auth/password/reset");
+
+    static final String OAUTH_PREFIX = "/api/v1/auth/oauth/";
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
@@ -54,11 +60,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/ping", "/.well-known/jwks.json",
                                 "/actuator/health/**", "/actuator/info").permitAll()
+                        // 소셜 로그인: 브라우저가 직접 여는 주소(제공자 목록·시작·콜백)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/oauth/providers",
+                                "/api/v1/auth/oauth/*/start", "/api/v1/auth/oauth/*/callback").permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POSTS.toArray(String[]::new)).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links/exchange").hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links/exchange").hasRole(CUSTOMER)
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/capture-links", "/api/v1/auth/pairing-codes")
                         .hasRole("ADMIN")
-                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").hasAnyRole("ADMIN", "CUSTOMER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/me").hasRole(CUSTOMER) // 탈퇴는 고객만
+                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").hasAnyRole("ADMIN", CUSTOMER)
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs
@@ -79,8 +89,10 @@ public class SecurityConfig {
     /** 공개 POST 경로는 만료·깨진 Bearer가 붙어 와도 읽지 않는다. 읽으면 경로와 상관없이 401이 되어 리프레시 재발급이 막힌다. */
     static BearerTokenResolver publicPathSkippingResolver() {
         DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
-        return request -> HttpMethod.POST.matches(request.getMethod())
-                && PUBLIC_POSTS.contains(request.getRequestURI()) ? null : delegate.resolve(request);
+        return request -> (HttpMethod.POST.matches(request.getMethod())
+                && PUBLIC_POSTS.contains(request.getRequestURI()))
+                || (HttpMethod.GET.matches(request.getMethod()) && request.getRequestURI().startsWith(OAUTH_PREFIX))
+                ? null : delegate.resolve(request);
     }
 
     @Bean
@@ -110,7 +122,7 @@ public class SecurityConfig {
         if (role == null) {
             return List.of();
         }
-        if ("CUSTOMER".equals(role) && jwt.hasClaim("scope")) {
+        if (CUSTOMER.equals(role) && jwt.hasClaim("scope")) {
             return List.of(new SimpleGrantedAuthority(ROLE_CAPTURE));
         }
         return List.of(new SimpleGrantedAuthority("ROLE_" + role));

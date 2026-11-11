@@ -12,14 +12,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.gakdo.trace.auth.account.domain.Account;
 import com.gakdo.trace.auth.account.domain.AccountRepository;
+import com.gakdo.trace.auth.account.domain.AccountStatus;
 import com.gakdo.trace.auth.booth.domain.ClientCredential;
 import com.gakdo.trace.auth.booth.domain.ClientCredentialRepository;
 import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.config.AuthProperties;
 
 /**
- * 관리자 계정과 부스 자격을 환경 변수(trace-secrets)로 만든다. 이미 있으면 건드리지 않는다.
+ * 관리자 계정·부스 자격·시연용 고객 계정을 환경 변수(trace-secrets)로 만든다. 이미 있으면 건드리지 않는다.
  * 관리자는 가입 화면이 아니라 초기 데이터로 만든다(설계서 "회원가입 규칙").
+ * 시연용 고객은 decisions.md 11/2 "회원 화면은 C, 데모 계정은 A"에 따라 이메일 인증을 마친 상태로 만든다.
+ * 비밀번호는 해시만 저장하고 로그에 남기지 않는다.
  */
 @Component
 public class InitialDataLoader implements ApplicationRunner {
@@ -47,6 +50,7 @@ public class InitialDataLoader implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         seedAdmin();
         seedBooth();
+        seedDemoCustomer();
     }
 
     void seedAdmin() {
@@ -79,6 +83,23 @@ public class InitialDataLoader implements ApplicationRunner {
         clients.save(ClientCredential.booth(booth.clientId(),
                 passwordEncoder.encode(booth.clientSecret()), clock.instant()));
         log.info("부스 자격 {}을 만들었습니다", booth.clientId());
+    }
+
+    void seedDemoCustomer() {
+        AuthProperties.DemoCustomer demo = properties.demoCustomer();
+        if (demo == null || isBlank(demo.email()) || isBlank(demo.password())) {
+            // 시연용이라 없는 것이 정상인 환경도 있다(경고가 아니라 안내)
+            log.info("DEMO_CUSTOMER_EMAIL·DEMO_CUSTOMER_PASSWORD가 없어 시연용 고객 계정을 만들지 않습니다");
+            return;
+        }
+        String email = Account.normalizeEmail(demo.email());
+        if (accounts.existsByEmail(email)) {
+            // 비밀번호를 덮어쓰지 않는다. 같은 이메일이 관리자여도 그대로 둔다
+            return;
+        }
+        accounts.save(Account.customer(NanoId.next(), email, passwordEncoder.encode(demo.password()), "시연 고객",
+                AccountStatus.ACTIVE, clock.instant()));
+        log.info("시연용 고객 계정을 만들었습니다");
     }
 
     private static boolean isBlank(String value) {

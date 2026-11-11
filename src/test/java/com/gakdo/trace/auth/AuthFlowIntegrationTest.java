@@ -150,11 +150,13 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.expiresIn").value(600))
                 .andExpect(jsonPath("$.rentalId").value(rentalId))
                 .andExpect(jsonPath("$.checkpointId").value(checkpointId))
+                .andExpect(jsonPath("$.deviceSerial").value("C02TEST00001"))
                 .andReturn();
         Jwt agent = jwtDecoder.decode(token(exchanged));
         assertThat(agent.getClaimAsString("role")).isEqualTo("AGENT");
         assertThat(agent.getClaimAsString("scope")).isEqualTo(checkpointId);
         assertThat(agent.getClaimAsString("rentalId")).isEqualTo(rentalId);
+        assertThat(agent.getClaimAsString("deviceSerial")).isEqualTo("C02TEST00001");
 
         mvc.perform(post("/api/v1/auth/pairing-codes/exchange")
                         .contentType(MediaType.APPLICATION_JSON).content(body(Map.of("code", code))))
@@ -268,7 +270,8 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     private String issuePairing(String admin, String rentalId, String checkpointId) throws Exception {
         MvcResult issued = mvc.perform(post("/api/v1/auth/pairing-codes").header("Authorization", "Bearer " + admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body(Map.of("rentalId", rentalId, "checkpointId", checkpointId))))
+                        .content(body(Map.of("rentalId", rentalId, "checkpointId", checkpointId,
+                                "deviceSerial", "C02TEST00001"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").isString())
                 .andReturn();

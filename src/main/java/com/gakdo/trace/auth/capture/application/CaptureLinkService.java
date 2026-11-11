@@ -20,6 +20,7 @@ import com.gakdo.trace.auth.common.domain.ErrorCode;
 import com.gakdo.trace.auth.common.infra.SecureTokens;
 import com.gakdo.trace.auth.common.infra.Sha256;
 import com.gakdo.trace.auth.config.AuthProperties;
+import com.gakdo.trace.auth.receipt.application.ReceiptService;
 import com.gakdo.trace.auth.token.application.JwtIssuer;
 import com.gakdo.trace.auth.token.domain.IssuedToken;
 import com.gakdo.trace.auth.token.domain.TokenClaims;
@@ -37,17 +38,20 @@ public class CaptureLinkService {
     private final SecureTokens tokens;
     private final JwtIssuer jwtIssuer;
     private final AuthProperties properties;
+    private final ReceiptService receipts;
     private final Clock clock;
 
     public CaptureLinkService(CaptureLinkRepository links, AccountRepository accounts,
                               RentalAccessRepository rentalAccesses,
-                              SecureTokens tokens, JwtIssuer jwtIssuer, AuthProperties properties, Clock clock) {
+                              SecureTokens tokens, JwtIssuer jwtIssuer, AuthProperties properties,
+                              ReceiptService receipts, Clock clock) {
         this.links = links;
         this.accounts = accounts;
         this.rentalAccesses = rentalAccesses;
         this.tokens = tokens;
         this.jwtIssuer = jwtIssuer;
         this.properties = properties;
+        this.receipts = receipts;
         this.clock = clock;
     }
 
@@ -91,12 +95,15 @@ public class CaptureLinkService {
     }
 
     private void link(Long accountId, String rentalId, Instant now) {
+        RentalAccess access;
         try {
-            rentalAccesses.saveAndFlush(new RentalAccess(accountId, rentalId, now));
+            access = rentalAccesses.saveAndFlush(new RentalAccess(accountId, rentalId, now));
         } catch (DataIntegrityViolationException e) {
             // 같은 렌탈을 다른 고객이 동시에 연결했다(rental_id UNIQUE). 트랜잭션째 되돌려 링크도 다시 쓸 수 있게 둔다
             throw new AuthException(ErrorCode.RENTAL_LINKED_TO_OTHER);
         }
+        // 연결 전에 봉인된 기록(보통 출고)의 영수증을 이제 보낸다(FR-INT-03). 메일은 커밋 뒤에 나간다
+        receipts.onRentalLinked(access);
     }
 
     public record IssuedLink(String url, Instant expiresAt) {

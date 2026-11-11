@@ -9,6 +9,19 @@ spring:
   threads:
     virtual:
       enabled: true
+  # 봉인 영수증(trace.record.sealed)만 받는다. 주소·계정은 infra.env·trace-secrets
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false   # 계속 실패하면 다시 넣지 않고 trace.dlx로
+        retry:
+          enabled: true
+          max-attempts: 3
   datasource:
     # DB trace 안에서 auth 스키마만 쓴다(헌법 II)
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:trace}?currentSchema=auth
@@ -31,6 +44,20 @@ spring:
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DATABASE:2}
       password: ${REDIS_PASSWORD:}
+  # 인증·재설정 코드 메일(팀 Gmail SMTP). 주소는 infra.env, 계정·앱 비밀번호는 trace-secrets(.env). 비어 있으면 보내지 않고 로그만 남긴다
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      # STARTTLS를 못 쓰면 평문으로 보내지 않고 실패한다
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 
 app:
   commit: ${APP_COMMIT:unknown}   # 이미지에 구운 커밋 SHA. /ping 응답에 실려 배포 확인에 쓴다
@@ -50,6 +77,12 @@ trace:
     pairing-code-ttl: 5m
     capture-link-ttl: 30m
     cookie-secure: true
+    # 이메일 인증·비밀번호 재설정 코드(설계서 "이메일 인증·비밀번호 재설정")
+    email-code:
+      ttl: 10m
+      max-attempts: 5
+      resend-interval: 60s
+      from: ${SMTP_FROM:${SMTP_USERNAME:}}
     # 초기 데이터(trace-secrets). 비어 있으면 만들지 않고 경고만 남긴다
     initial-admin:
       email: ${ADMIN_EMAIL:}
@@ -57,12 +90,37 @@ trace:
     initial-booth:
       client-id: ${BOOTH_CLIENT_ID:}
       client-secret: ${BOOTH_CLIENT_SECRET:}
+    # 시연용 고객 계정(trace-secrets). 비어 있으면 만들지 않는다
+    demo-customer:
+      email: ${DEMO_CUSTOMER_EMAIL:}
+      password: ${DEMO_CUSTOMER_PASSWORD:}
+    # 소셜 로그인 client id/secret(trace-secrets·.env). id나 secret이 비어 있는 제공자는 꺼진다(로그인 화면에 버튼 없음).
+    # 각 제공자 앱에 등록할 콜백 주소: {WEB_PUBLIC_URL}/api/v1/auth/oauth/{google|github|kakao|naver}/callback
+    social:
+      state-ttl: 10m
+      google:
+        client-id: ${GOOGLE_CLIENT_ID:}
+        client-secret: ${GOOGLE_CLIENT_SECRET:}
+      github:
+        client-id: ${GITHUB_CLIENT_ID:}
+        client-secret: ${GITHUB_CLIENT_SECRET:}
+      kakao:
+        client-id: ${KAKAO_CLIENT_ID:}
+        client-secret: ${KAKAO_CLIENT_SECRET:}
+      naver:
+        client-id: ${NAVER_CLIENT_ID:}
+        client-secret: ${NAVER_CLIENT_SECRET:}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+  health:
+    mail:
+      enabled: false   # SMTP가 잠깐 안 돼도 프로브가 실패해 재시작되지 않게(메일 실패는 로그로 본다)
+    rabbit:
+      enabled: false   # 영수증은 나중에 다시 받으면 되므로 RabbitMQ가 잠깐 안 돼도 로그인 서버를 재시작하지 않게
   endpoint:
     health:
       probes:

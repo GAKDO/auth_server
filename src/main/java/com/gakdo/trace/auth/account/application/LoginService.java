@@ -42,7 +42,7 @@ public class LoginService {
         this.refreshTokens = refreshTokens;
         this.jwtIssuer = jwtIssuer;
         this.properties = properties;
-        this.dummyHash = passwordEncoder.encode("timing-equalizer");
+        this.dummyHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
     }
 
     @Transactional(readOnly = true)
@@ -91,7 +91,8 @@ public class LoginService {
                 account.getStatus(), rentalsOf(account));
     }
 
-    private LoginResult issueFor(Account account) {
+    /** 이미 확인한 계정에 액세스·리프레시 토큰을 낸다(비밀번호 로그인·소셜 로그인이 같이 쓴다). */
+    public LoginResult issueFor(Account account) {
         TokenClaims claims = account.getRole() == AccountRole.ADMIN
                 ? TokenClaims.admin(account.getPublicId(), properties.accessTokenTtl())
                 : TokenClaims.customer(account.getPublicId(), rentalsOf(account), properties.accessTokenTtl());
