@@ -29,6 +29,10 @@ public class Account {
     @Column(name = "password_hash")
     private String passwordHash;
 
+    /** 사용자가 비밀번호를 직접 정했는지. 소셜 가입·인증 전 계정의 소셜 전환은 아무도 모르는 난수라 false다. */
+    @Column(name = "password_set")
+    private boolean passwordSet = true;
+
     private String name;
 
     @Enumerated(EnumType.STRING)
@@ -96,8 +100,17 @@ public class Account {
         }
     }
 
+    /** 사용자가 정한 비밀번호로 바꾼다(재설정). 이후로는 탈퇴에 비밀번호가 필요하다. */
     public void changePassword(String newPasswordHash, Instant now) {
         passwordHash = newPasswordHash;
+        passwordSet = true;
+        updatedAt = now;
+    }
+
+    /** 아무도 모르는 난수 비밀번호로 바꾼다(소셜 가입·인증 전 계정의 소셜 전환). 비밀번호 로그인은 막힌다. */
+    public void replaceWithUnusablePassword(String unusableHash, Instant now) {
+        passwordHash = unusableHash;
+        passwordSet = false;
         updatedAt = now;
     }
 
@@ -109,6 +122,10 @@ public class Account {
         status = AccountStatus.WITHDRAWN;
         withdrawnAt = now;
         updatedAt = now;
+    }
+
+    public boolean isPasswordSet() {
+        return passwordSet;
     }
 
     public static String normalizeEmail(String email) {

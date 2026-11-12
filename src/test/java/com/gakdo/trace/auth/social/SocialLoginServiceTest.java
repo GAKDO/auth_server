@@ -89,6 +89,7 @@ class SocialLoginServiceTest {
         assertThat(created.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(created.getName()).isEqualTo("개발자");
         assertThat(created.getPasswordHash()).isEqualTo("random-unusable");
+        assertThat(created.isPasswordSet()).isFalse();
         assertThat(identityRows).singleElement().satisfies(i -> {
             assertThat(i.getProvider()).isEqualTo(SocialProvider.GITHUB);
             assertThat(i.getSubject()).isEqualTo("123");
@@ -119,6 +120,7 @@ class SocialLoginServiceTest {
         assertThat(pending.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(pending.getName()).isEqualTo("나");
         assertThat(pending.getPasswordHash()).isEqualTo("random-unusable");
+        assertThat(pending.isPasswordSet()).isFalse();
         assertThat(identityRows).singleElement().extracting(SocialIdentity::getAccountId).isEqualTo(pending.getId());
     }
 
@@ -130,6 +132,7 @@ class SocialLoginServiceTest {
         service.login(new SocialProfile(SocialProvider.GOOGLE, "g-1", "me@trace.test", "Google 이름"));
 
         assertThat(active.getPasswordHash()).isEqualTo("hash");
+        assertThat(active.isPasswordSet()).isTrue();
     }
 
     @Test
