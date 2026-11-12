@@ -21,7 +21,8 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다"),
     CODE_INVALID(HttpStatus.BAD_REQUEST, "인증 코드가 맞지 않습니다"),
     CODE_EXPIRED(HttpStatus.GONE, "인증 코드가 만료되었습니다"),
-    RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "잠시 후 다시 요청해 주세요");
+    RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "잠시 후 다시 요청해 주세요"),
+    REAUTH_REQUIRED(HttpStatus.FORBIDDEN, "다시 로그인한 뒤 해 주세요");
 
     private final HttpStatus status;
     private final String title;

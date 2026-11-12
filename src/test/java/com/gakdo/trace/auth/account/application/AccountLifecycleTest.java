@@ -53,6 +53,8 @@ class AccountLifecycleTest {
     private final CodeMailer mailer = mock(CodeMailer.class);
     private final ResendGuard guard = mock(ResendGuard.class);
     private final RefreshTokenStore refreshTokens = mock(RefreshTokenStore.class);
+    private final com.gakdo.trace.auth.social.domain.SocialIdentityRepository socialIdentities =
+            mock(com.gakdo.trace.auth.social.domain.SocialIdentityRepository.class);
     @SuppressWarnings("deprecation")
     private final PasswordEncoder encoder = NoOpPasswordEncoder.getInstance();
     private final EmailCodeProperties props = new EmailCodeProperties(Duration.ofMinutes(10), 5,
@@ -96,7 +98,7 @@ class AccountLifecycleTest {
         EmailCodeService codes = new EmailCodeService(tokens, secureTokens, mailer, props, clock);
         signup = new SignupService(accounts, encoder, codes, guard, clock);
         reset = new PasswordResetService(accounts, tokens, encoder, codes, guard, refreshTokens, clock);
-        withdraw = new WithdrawService(accounts, encoder, refreshTokens, clock);
+        withdraw = new WithdrawService(accounts, encoder, refreshTokens, socialIdentities, clock);
     }
 
     @Test
@@ -199,15 +201,80 @@ class AccountLifecycleTest {
         signup.verify("e@trace.test", "123456");
         Account account = accountRows.get(0);
 
-        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), "wrong-pass"))
+        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), "wrong-pass", T0))
                 .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
-        withdraw.withdraw(account.getPublicId(), "pass-1234");
+        withdraw.withdraw(account.getPublicId(), "pass-1234", null);
 
         assertThat(account.getStatus()).isEqualTo(AccountStatus.WITHDRAWN);
         assertThat(account.getEmail()).isNull();
         assertThat(account.getName()).isNull();
         assertThat(account.getPasswordHash()).isNull();
         verify(refreshTokens).revokeAll(account.getPublicId());
+    }
+
+    @Test
+    @DisplayName("비밀번호를 정한 적 없는 계정은 로그인한 지 10분 안이면 비밀번호 없이 탈퇴하고, 소셜 연결도 지워진다")
+    void socialAccountWithdrawsWithoutPassword() {
+        Account account = socialOnlyAccount("s@trace.test");
+        clock.advance(Duration.ofMinutes(9));
+
+        withdraw.withdraw(account.getPublicId(), null, T0);
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.WITHDRAWN);
+        verify(socialIdentities).deleteByAccountId(account.getId());
+        verify(refreshTokens).revokeAll(account.getPublicId());
+    }
+
+    @Test
+    @DisplayName("비밀번호 없는 탈퇴는 로그인한 지 10분이 지났거나 로그인 시각을 모르면 403 REAUTH_REQUIRED이고 탈퇴되지 않는다")
+    void passwordlessWithdrawNeedsRecentLogin() {
+        Account account = socialOnlyAccount("old@trace.test");
+        clock.advance(Duration.ofMinutes(11));
+
+        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), null, T0))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.REAUTH_REQUIRED);
+        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), "", null))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.REAUTH_REQUIRED);
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("비밀번호를 정한 계정은 소셜이 자동 연결돼 있어도 비밀번호를 빼면 401이고 탈퇴되지 않는다")
+    void passwordAccountNeedsPassword() {
+        signup.signup("p@trace.test", "pass-1234", "비번", true);
+        signup.verify("p@trace.test", "123456");
+        Account account = accountRows.get(0);
+        given(socialIdentities.findByAccountId(account.getId())).willReturn(java.util.List.of(
+                new com.gakdo.trace.auth.social.domain.SocialIdentity(account.getId(),
+                        com.gakdo.trace.auth.social.domain.SocialProvider.GOOGLE, "g-1", "p@trace.test", T0)));
+
+        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), null, T0))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), "", T0))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("소셜 가입 계정도 비밀번호를 재설정하면 그다음부터는 탈퇴에 비밀번호가 필요하다")
+    void resetPasswordMakesPasswordSet() {
+        Account account = socialOnlyAccount("r@trace.test");
+        assertThat(account.isPasswordSet()).isFalse();
+
+        account.changePassword("new-pass-1234", T0);
+
+        assertThat(account.isPasswordSet()).isTrue();
+        assertThatThrownBy(() -> withdraw.withdraw(account.getPublicId(), null, T0))
+                .extracting(e -> ((AuthException) e).code()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    /** 소셜 가입처럼 아무도 모르는 비밀번호를 가진 ACTIVE 계정. */
+    private Account socialOnlyAccount(String email) {
+        signup.signup(email, "pass-1234", "소셜", true);
+        signup.verify(email, "123456");
+        Account account = accountRows.get(0);
+        account.replaceWithUnusablePassword("unusable", T0);
+        return account;
     }
 
     private Optional<Account> find(String email) {

@@ -151,11 +151,13 @@ class SecurityRulesTest {
                     .andExpect(status().isForbidden());
         }
         String accountId = NanoId.next();
+        Instant loggedInAt = Instant.ofEpochSecond(1_794_000_000L);
         mvc.perform(delete("/api/v1/auth/me").header("Authorization",
-                                bearer(TokenClaims.customer(accountId, List.of(), TTL)))
+                                bearer(TokenClaims.customer(accountId, List.of(), TTL).withAuthTime(loggedInAt)))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNoContent());
-        verify(withdrawService).withdraw(accountId, "pass-1234");
+        // 토큰의 auth_time(로그인 시각)을 그대로 넘긴다
+        verify(withdrawService).withdraw(accountId, "pass-1234", loggedInAt);
     }
 
     @Test
@@ -183,7 +185,7 @@ class SecurityRulesTest {
     void meWithCustomer() throws Exception {
         String accountId = NanoId.next();
         given(loginService.me(accountId)).willReturn(new MeView(accountId, "c@trace.test", "고객",
-                AccountRole.CUSTOMER, AccountStatus.ACTIVE, List.of(RENTAL)));
+                AccountRole.CUSTOMER, AccountStatus.ACTIVE, List.of(RENTAL), List.of(), true));
         mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(TokenClaims.customer(accountId,
                         List.of(RENTAL), TTL))))
                 .andExpect(status().isOk())
