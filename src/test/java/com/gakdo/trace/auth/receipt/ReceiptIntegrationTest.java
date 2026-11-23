@@ -1,3 +1,7 @@
+// 이 파일이 확인하는 것: 요구사항 AU3(봉인 영수증 메일)을 진짜 DB로 확인.
+// 출고 때는 아직 고객 계정과 렌탈이 연결되지 않았을 수 있다(고객은 수령 때 QR로 연결).
+// 그래서 연결 전 봉인은 보관해 두었다가, 연결되는 순간 한 번에 보낸다. 메일은 가짜로 바꿔 보낸 횟수만 센다.
+
 package com.gakdo.trace.auth.receipt;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +53,9 @@ class ReceiptIntegrationTest extends IntegrationTestBase {
     @MockitoBean
     ReceiptMailer mailer;
 
+    // [상황] 출고 봉인 이벤트가 두 번(중복) 온다 → 고객이 QR로 렌탈을 연결 → 수령 봉인 이벤트 → 연결 처리 한 번 더.
+    // [기대] 연결 전에는 보내지 않고 기록만 해 둔다(중복 이벤트는 무시). 연결되면 출고 영수증 1통.
+    //        수령 봉인은 바로 1통(총 2통). 연결 처리를 또 해도 더 보내지 않는다.
     @Test
     @DisplayName("고객 연결 전 봉인은 보내지 않고 남겨 두었다가, 수령 때 렌탈이 연결되면 한 번만 보낸다")
     void pendingUntilLinkedThenOnce() {

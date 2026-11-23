@@ -1,3 +1,7 @@
+// 테스트 공통 바탕(테스트 자체는 아님): 진짜 PostgreSQL·Redis가 필요한 통합 테스트용.
+// GitHub Actions에서는 Docker로 띄우고, Docker가 없는 곳에서는 TRACE_IT_LOCAL=1이면 로컬 테스트 전용 DB에 붙는다.
+// 둘 다 없으면 통합 테스트는 건너뛴다.
+
 package com.gakdo.trace.auth.support;
 
 import org.springframework.boot.test.context.SpringBootTest;
