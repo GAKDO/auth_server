@@ -114,6 +114,7 @@ class HttpSocialProviderClientTest {
 
     // [상황] 깃허브가 200 응답 안에 오류(bad_verification_code)를 담아 보낸다.
     // [기대] 제공자 오류(PROVIDER_ERROR)로 처리한다.
+    //        ※ 응답 코드: 200 = 정상 처리됨
     @Test
     @DisplayName("토큰 교환이 200에 error를 실어 오면 PROVIDER_ERROR")
     void tokenErrorInBody() {

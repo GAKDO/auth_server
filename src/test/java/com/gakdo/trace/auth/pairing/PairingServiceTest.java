@@ -72,6 +72,7 @@ class PairingServiceTest {
 
     // [상황] 없는 코드를 넣고, 만료된 코드를 넣는다.
     // [기대] 없으면 400 PAIRING_CODE_INVALID, 만료면 410 PAIRING_CODE_EXPIRED.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음, 410 = 이미 쓰였거나 만료되어 더는 쓸 수 없음
     @Test
     @DisplayName("없는 코드는 400, 만료된 코드는 410이다")
     void exchangeFailures() {
@@ -88,6 +89,7 @@ class PairingServiceTest {
 
     // [상황] 같은 코드를 두 곳에서 동시에 넣어 다른 쪽이 먼저 썼다.
     // [기대] 늦은 쪽은 410(한 코드로 토큰 두 개가 나가지 않게).
+    //        ※ 응답 코드: 410 = 이미 쓰였거나 만료되어 더는 쓸 수 없음
     @Test
     @DisplayName("동시에 먼저 쓰인 코드(조건부 갱신 0건)는 410이다")
     void exchangeRace() {
@@ -102,6 +104,7 @@ class PairingServiceTest {
     // [상황] 기기 일련번호 없이 만든 예전 코드와, 일련번호가 있는 코드를 각각 넣는다.
     // [기대] 예전 코드는 400. 일련번호가 있으면 AGENT 토큰 안에 같은 일련번호가 들어간다
     //        (에이전트가 진단한 노트북과 렌탈 기기가 같은지 확인하는 데 쓴다).
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("기기 시리얼 없이 만든 예전 코드는 400이고 시리얼이 있으면 AGENT 토큰에 같은 시리얼이 들어간다")
     void exchangeCarriesDeviceSerial() {
@@ -142,6 +145,7 @@ class PairingServiceTest {
 
     // [상황] 틀린 코드가 몰려 전체 교환이 42초 동안 막힌 상태에서 맞는 코드를 넣는다.
     // [기대] 429와 남은 42초를 알리고, 코드를 조회하지도 쓰지도 않는다.
+    //        ※ 응답 코드: 429 = 요청이 너무 잦아 잠시 막음
     @Test
     @DisplayName("전역 실패 한도로 막는 동안은 맞는 코드도 429와 남은 초로 거절하고 코드를 쓰지 않는다")
     void blockedExchangeIsRateLimited() {
