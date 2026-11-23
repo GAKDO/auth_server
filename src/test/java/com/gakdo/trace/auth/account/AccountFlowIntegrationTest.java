@@ -1,3 +1,5 @@
+// 이 파일이 확인하는 것: 요구사항 AU2(회원 가입·탈퇴) 흐름을 진짜 DB·Redis로 한 번에 확인.
+
 package com.gakdo.trace.auth.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +47,9 @@ class AccountFlowIntegrationTest extends IntegrationTestBase {
     @MockitoBean
     CodeMailer mailer;
 
+    // [상황] 가입 → 인증 전 로그인 → 메일 코드로 인증 → 로그인 → 탈퇴 → 다시 로그인 순서로 진행한다.
+    // [기대] DB에는 인증 코드 해시만 저장된다. 인증 전 로그인은 403 EMAIL_NOT_VERIFIED, 인증 뒤엔 로그인된다.
+    //        탈퇴하면 이메일·이름·비밀번호가 DB에서 지워지고(WITHDRAWN), 같은 정보로 다시 로그인하면 401.
     @Test
     @DisplayName("가입하면 코드 해시만 저장되고, 인증 전 로그인은 403, 인증 뒤 로그인되며, 탈퇴하면 개인정보가 DB에 남지 않는다")
     void signupVerifyLoginWithdraw() throws Exception {

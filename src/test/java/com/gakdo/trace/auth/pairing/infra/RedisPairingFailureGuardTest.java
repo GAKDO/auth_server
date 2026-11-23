@@ -1,3 +1,6 @@
+// 이 파일이 확인하는 것: 페어링 코드 무차별 대입 막기(Redis로 1분마다 실패를 센다).
+// 1분에 틀린 코드가 30번 쌓이면 2분 동안 모든 페어링 교환을 막는다. 가짜 Redis로 보낸 명령을 확인한다.
+
 package com.gakdo.trace.auth.pairing.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +39,8 @@ class RedisPairingFailureGuardTest {
     private final RedisPairingFailureGuard guard =
             new RedisPairingFailureGuard(redis, Clock.fixed(NOW, ZoneOffset.UTC), properties);
 
+    // [상황] 교환을 시작하며 "시도 하나 잡기"를 한다(막힌 상태 아님).
+    // [기대] Redis 스크립트 한 번으로 처리하고(한도 30·막는 시간 120초·창 60초), 잡은 1분 창 이름을 시도에 담는다.
     @Test
     @DisplayName("잡기는 스크립트 하나로 원자적으로 부르고, 받아들이면 잡은 창을 시도에 담는다")
     void acquireRunsAtomicScriptAndCarriesWindow() {
@@ -49,6 +54,8 @@ class RedisPairingFailureGuardTest {
                 "30", "120000", "60", "1");
     }
 
+    // [상황] 이미 막힌 상태라 스크립트가 "17초 남음"을 돌려준다.
+    // [기대] 17초 동안 거절한다.
     @Test
     @DisplayName("스크립트가 남은 초를 돌려주면 그 초만큼 거절한다")
     void acquireReportsRemainingBlock() {
@@ -56,6 +63,8 @@ class RedisPairingFailureGuardTest {
         assertThat(guard.tryAcquire().blockedForSeconds()).isEqualTo(17L);
     }
 
+    // [상황] 잡기 스크립트 내용을 본다.
+    // [기대] 막힘 여부를 먼저 보고, "실패 + 지금 확인 중"이 한도면 막지 않고 미루기만 한다(막기는 시작하지 않음).
     @Test
     @DisplayName("잡기 스크립트는 막는 키를 먼저 보고, 실패+조회 중이 한도면 막지 않고 미루기만 한다")
     void acquireScriptNeverStartsBlock() {
@@ -64,6 +73,8 @@ class RedisPairingFailureGuardTest {
         assertThat(script).contains("f + p >= tonumber(ARGV[1])").doesNotContain("SET");
     }
 
+    // [상황] 실패 기록 스크립트 내용을 본다.
+    // [기대] 실제로 틀린 것으로 확인된 실패가 한도에 닿을 때만 막기를 시작한다.
     @Test
     @DisplayName("막기는 확인된 실패가 한도에 닿을 때만 실패 스크립트에서 시작한다")
     void onlyConfirmedFailuresStartBlock() {
@@ -71,6 +82,8 @@ class RedisPairingFailureGuardTest {
                 .contains("'fail', 1").contains("f >= tonumber(ARGV[1])").contains("'NX'");
     }
 
+    // [상황] 59.9초에 시도를 잡고, 다음 분으로 넘어간 뒤 실패·풀기를 기록한다.
+    // [기대] 잡을 때의 1분 창에 기록한다(창이 바뀌어 숫자가 어긋나지 않게).
     @Test
     @DisplayName("분 경계를 넘어도 실패·풀기는 잡을 때의 창을 쓴다")
     void failureAndRefundUseAcquiredWindow() {
@@ -84,6 +97,8 @@ class RedisPairingFailureGuardTest {
         verify(redis).execute(RedisPairingFailureGuard.REFUND, List.of("trace:auth:pairing:fail:old"));
     }
 
+    // [상황] Redis가 고장 났다.
+    // [기대] 서비스를 멈추지 않고 교환을 계속 허용한다. 창 없는 시도는 나중에 Redis를 부르지도 않는다.
     @Test
     @DisplayName("Redis가 안 되면 막지 않고 교환을 계속하고, 창 없는 시도는 Redis를 부르지 않는다")
     void failsOpenWhenRedisIsDown() {

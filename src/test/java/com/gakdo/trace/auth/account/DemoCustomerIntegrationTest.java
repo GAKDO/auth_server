@@ -1,3 +1,6 @@
+// 이 파일이 확인하는 것: 시연(대회 발표)용 고객 계정이 진짜 DB에 만들어지고 로그인되는지.
+// 이메일·비밀번호는 환경 변수로 받으며, 테스트에서는 실행할 때마다 새로 만든다.
+
 package com.gakdo.trace.auth.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +51,8 @@ class DemoCustomerIntegrationTest extends IntegrationTestBase {
     @Autowired
     InitialDataLoader loader;
 
+    // [상황] 시연용 고객 이메일·비밀번호를 설정하고 서버를 켠 뒤 그 계정으로 로그인한다.
+    // [기대] CUSTOMER 토큰을 받고, DB에는 사용 가능·이메일 인증 완료 상태로 저장돼 있다.
     @Test
     @DisplayName("값이 있으면 시작할 때 만들어진 시연용 고객 계정으로 로그인하면 CUSTOMER 액세스 JWT를 받는다")
     void demoCustomerCanLogIn() throws Exception {
@@ -63,6 +68,8 @@ class DemoCustomerIntegrationTest extends IntegrationTestBase {
         assertThat(row.get("email_verified_at")).isNotNull();
     }
 
+    // [상황] 서버를 다시 켠 것처럼 초기 데이터 작업을 한 번 더 돌린다.
+    // [기대] 시연용 계정은 여전히 하나뿐이다(중복 생성 없음).
     @Test
     @DisplayName("서버를 두 번 시작해도 시연용 고객 계정은 하나다")
     void startingTwiceKeepsOneAccount() {

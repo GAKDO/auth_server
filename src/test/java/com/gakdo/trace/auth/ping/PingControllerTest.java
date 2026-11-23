@@ -1,3 +1,5 @@
+// 이 파일이 확인하는 것: auth-server 점검 주소(/api/v1/auth/ping).
+
 package com.gakdo.trace.auth.ping;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -19,6 +21,8 @@ class PingControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    // [상황] 점검 주소를 부른다.
+    // [기대] 서비스 이름 auth-server·상태 ok·배포 커밋을 돌려준다.
     @Test
     void ping() throws Exception {
         mockMvc.perform(get("/api/v1/auth/ping"))

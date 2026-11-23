@@ -1,3 +1,6 @@
+// 이 파일이 확인하는 것: 각 소셜 제공자(구글·깃허브·카카오·네이버) 응답에서 사용자 번호와 "인증된" 이메일을 읽는 규칙.
+// 진짜 제공자 대신 정해 둔 응답을 돌려주는 가짜 서버를 쓴다. 키 값은 테스트용 가짜.
+
 package com.gakdo.trace.auth.social.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +42,8 @@ class HttpSocialProviderClientTest {
         client = new HttpSocialProviderClient(builder.build(), props);
     }
 
+    // [상황] 깃허브 사용자가 이메일을 비공개로 해 두었다.
+    // [기대] 이메일 목록 주소에서 인증된 대표(primary) 이메일을 골라 쓴다.
     @Test
     @DisplayName("GitHub 이메일이 비공개여도 /user/emails에서 인증된 primary 이메일을 고른다")
     void githubPrivateEmail() {
@@ -56,6 +61,8 @@ class HttpSocialProviderClientTest {
         server.verify();
     }
 
+    // [상황] 깃허브 대표 이메일이 아직 인증되지 않았다.
+    // [기대] 이메일 없이 돌려준다(남의 이메일로 가입하는 것 방지).
     @Test
     @DisplayName("GitHub primary 이메일이 인증 전이면 이메일 없이 돌려준다")
     void githubUnverifiedPrimary() {
@@ -67,6 +74,8 @@ class HttpSocialProviderClientTest {
         assertThat(client.fetchProfile(SocialProvider.GITHUB, "code", REDIRECT, "s").email()).isNull();
     }
 
+    // [상황] 구글이 이메일 인증됨(email_verified=true)을 준다.
+    // [기대] 그 이메일과 이름을 쓴다.
     @Test
     @DisplayName("Google은 email_verified가 true일 때만 이메일을 쓴다")
     void googleVerifiedOnly() {
@@ -77,6 +86,8 @@ class HttpSocialProviderClientTest {
                 .isEqualTo(new SocialProfile(SocialProvider.GOOGLE, "g1", "a@gmail.com", "A"));
     }
 
+    // [상황] 카카오가 인증·유효한 이메일과 닉네임을 준다.
+    // [기대] 이메일을 쓰고 닉네임을 이름으로 쓴다.
     @Test
     @DisplayName("카카오는 인증·유효한 이메일만 쓰고 닉네임을 이름으로 쓴다")
     void kakao() {
@@ -88,6 +99,8 @@ class HttpSocialProviderClientTest {
                 .isEqualTo(new SocialProfile(SocialProvider.KAKAO, "7", "k@kakao.com", "카카오"));
     }
 
+    // [상황] 네이버 로그인 토큰을 받는다.
+    // [기대] 네이버가 요구하는 state 값을 토큰 요청에 함께 보낸다.
     @Test
     @DisplayName("네이버 토큰 교환에는 state를 함께 보낸다")
     void naverSendsState() {
@@ -99,6 +112,8 @@ class HttpSocialProviderClientTest {
         assertThat(client.fetchProfile(SocialProvider.NAVER, "code", REDIRECT, "s-1").email()).isEqualTo("n@naver.com");
     }
 
+    // [상황] 깃허브가 200 응답 안에 오류(bad_verification_code)를 담아 보낸다.
+    // [기대] 제공자 오류(PROVIDER_ERROR)로 처리한다.
     @Test
     @DisplayName("토큰 교환이 200에 error를 실어 오면 PROVIDER_ERROR")
     void tokenErrorInBody() {
@@ -110,6 +125,7 @@ class HttpSocialProviderClientTest {
                 .isEqualTo(SocialLoginError.PROVIDER_ERROR);
     }
 
+    // 도우미: "토큰 교환 요청이 오면 테스트용 토큰을 준다"를 가짜 서버에 걸어 둔다.
     private void token(String url) {
         server.expect(requestTo(url)).andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))

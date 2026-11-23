@@ -1,3 +1,5 @@
+// 테스트 도구(테스트 자체는 아님): 컨트롤러만 띄우는 테스트에 운영과 같은 보안 규칙·토큰 발급기를 붙인다.
+
 package com.gakdo.trace.auth.support;
 
 import org.springframework.boot.test.context.TestConfiguration;

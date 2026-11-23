@@ -1,3 +1,5 @@
+// 이 파일이 확인하는 것: 소셜 제공자 클라이언트가 스프링에서 문제없이 만들어지는지(생성자가 두 개라 생길 수 있는 오류 확인).
+
 package com.gakdo.trace.auth.social.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,6 +22,8 @@ class HttpSocialProviderClientWiringTest {
     static class Props {
     }
 
+    // [상황] 설정만으로 스프링을 띄운다(DB 없이).
+    // [기대] 소셜 제공자 클라이언트가 하나 만들어진다.
     @Test
     @DisplayName("애플리케이션 컨텍스트에서 소셜 제공자 클라이언트 빈이 만들어진다")
     void beanIsCreated() {
