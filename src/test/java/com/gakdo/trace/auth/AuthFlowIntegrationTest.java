@@ -102,6 +102,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
 
     // [상황] 리프레시 쿠키로 접속 토큰을 다시 받고, 이미 한 번 쓴 리프레시와 로그아웃한 리프레시로 또 시도한다.
     // [기대] 다시 받기는 되고 리프레시도 새것으로 바뀐다. 쓴 것·로그아웃한 것은 401(도난 토큰 재사용 차단).
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("리프레시로 다시 발급되고, 쓴 리프레시와 로그아웃한 리프레시는 401이다")
     void refreshRotationAndLogout() throws Exception {
@@ -129,6 +130,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
 
     // [상황] 비밀번호를 틀리고, 이메일 인증을 아직 안 한 고객으로 로그인한다.
     // [기대] 틀린 비밀번호는 401, 인증 전 고객은 403.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨), 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("틀린 비밀번호는 401이고 인증 전 고객은 403이다")
     void loginFailures() throws Exception {
@@ -186,6 +188,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
 
     // [상황] 부스(Jetson)가 부스 ID·비밀값으로 토큰을 요청한다. 틀린 비밀값으로도 해 본다.
     // [기대] 맞으면 BOOTH 토큰, 틀리면 401.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("부스 자격은 BOOTH JWT로 바뀌고 틀린 secret은 401이다")
     void boothToken() throws Exception {
@@ -208,6 +211,7 @@ class AuthFlowIntegrationTest extends IntegrationTestBase {
     // [상황] 관리자가 렌탈 시점용 QR 링크를 만들고, 고객이 QR을 찍어 교환한다. 다른 고객이 같은 렌탈 QR을 교환해 본다.
     // [기대] 고객은 그 시점에만 쓰는 촬영 JWT를 받고, 렌탈이 고객 계정에 연결된다.
     //        이미 다른 계정에 연결된 렌탈이면 409(남의 렌탈 가로채기 방지).
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("QR 교환은 그 시점만 쓰는 촬영 JWT를 주고 렌탈을 계정에 연결하며, 다른 계정에 연결된 렌탈은 409이다")
     void captureLink() throws Exception {

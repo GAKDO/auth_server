@@ -56,6 +56,7 @@ import com.gakdo.trace.auth.token.domain.TokenClaims;
 import com.gakdo.trace.auth.token.infra.SigningKeyProvider;
 
 /** 역할별 접근 규칙(contracts x-trace-access)과 401·403 Problem 본문. DB 없이 실제 SecurityConfig로 확인한다. */
+// ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨), 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
 @WebMvcTest
 @Import(WebSliceConfig.class)
 class SecurityRulesTest {
@@ -99,6 +100,7 @@ class SecurityRulesTest {
 
     // [상황] 가입·이메일 인증·인증 메일 재발송·비밀번호 재설정을 로그인 없이 부르고, 만료된 토큰을 붙여서도 부른다.
     // [기대] 모두 열려 있고, 만료 토큰 때문에 401이 나지 않는다(로그인 못 하는 사람이 쓰는 기능이므로).
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("가입·인증·재발송·재설정은 토큰 없이 부르고, 만료된 Bearer가 붙어도 401이 아니다")
     void accountPathsArePublic() throws Exception {
@@ -126,6 +128,7 @@ class SecurityRulesTest {
 
     // [상황] 이메일 인증 코드를 틀리게 넣고, 60초 안에 인증 메일을 다시 보내 달라고 한다.
     // [기대] 틀리면 400 CODE_INVALID와 남은 시도 횟수, 너무 빠른 재발송은 429와 몇 초 뒤 다시(Retry-After).
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음, 429 = 요청이 너무 잦아 잠시 막음
     @Test
     @DisplayName("인증 코드가 틀리면 400 CODE_INVALID와 남은 횟수, 60초 안 재발송은 429와 Retry-After다")
     void codeProblems() throws Exception {
@@ -149,6 +152,7 @@ class SecurityRulesTest {
 
     // [상황] 고객·관리자·QR 촬영 토큰으로 탈퇴를 부른다.
     // [기대] 일반 고객 토큰만 탈퇴할 수 있고, 관리자·촬영 토큰은 403.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("탈퇴는 CUSTOMER 일반 토큰만 하고 ADMIN·촬영 JWT는 403이다")
     void withdrawIsCustomerOnly() throws Exception {
@@ -171,6 +175,7 @@ class SecurityRulesTest {
 
     // [상황] 만료된 접속 토큰으로 내 정보를 부른다.
     // [기대] 401.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("만료된 액세스 토큰은 401이다")
     void expiredAccessToken() throws Exception {
@@ -185,6 +190,7 @@ class SecurityRulesTest {
 
     // [상황] 로그인 없이 내 정보를 부른다.
     // [기대] 401.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("토큰 없이 내 정보를 부르면 401이다")
     void meWithoutToken() throws Exception {
@@ -210,6 +216,7 @@ class SecurityRulesTest {
 
     // [상황] QR 촬영 토큰·부스 토큰·진단 에이전트 토큰으로 내 정보를 부른다.
     // [기대] 한 가지 일만 하는 좁은 토큰이라 403.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("촬영 JWT·BOOTH·AGENT로 내 정보를 부르면 403이다")
     void meWithNarrowTokens() throws Exception {
@@ -225,6 +232,7 @@ class SecurityRulesTest {
 
     // [상황] QR 링크와 페어링 코드 발급을 관리자·고객 토큰으로 부른다.
     // [기대] 관리자만 발급할 수 있고 고객은 403.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("QR 링크·페어링 코드 발급은 ADMIN만 하고 CUSTOMER는 403이다")
     void issuingIsAdminOnly() throws Exception {
@@ -246,6 +254,7 @@ class SecurityRulesTest {
 
     // [상황] 페어링 코드를 기기 일련번호 없이, 빈 값으로, 64자를 넘는 값으로 발급하려 한다.
     // [기대] 모두 400. 코드는 반드시 특정 기기에 묶여야 한다(다른 노트북 진단이 섞이지 않게).
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("페어링 코드 발급에 기기 시리얼이 없거나 비었거나 64자를 넘으면 400이다")
     void pairingCodeNeedsDeviceSerial() throws Exception {
@@ -262,6 +271,7 @@ class SecurityRulesTest {
 
     // [상황] QR 교환을 고객·관리자·촬영 토큰으로 부른다.
     // [기대] 로그인한 일반 고객만 할 수 있고, 관리자·촬영 토큰은 403.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("QR 교환은 로그인한 일반 고객만 하고 ADMIN·촬영 JWT는 403이다")
     void exchangeIsCustomerOnly() throws Exception {
@@ -276,6 +286,7 @@ class SecurityRulesTest {
 
     // [상황] 렌탈 번호를 정해진 모양(21자 ID)이 아닌 값으로 보낸다.
     // [기대] 400 VALIDATION_FAILED.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("형식이 틀린 rentalId는 400 VALIDATION_FAILED이다")
     void invalidPublicId() throws Exception {
@@ -291,6 +302,7 @@ class SecurityRulesTest {
 
     // [상황] 로그인·리프레시·부스 토큰·페어링 교환을 토큰 없이 틀린 값으로 부른다.
     // [기대] 열려 있는 주소라 401이 아니라 각 기능의 오류(예: 비밀번호 틀림)를 계약 오류 형식(Problem)으로 준다.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("로그인·리프레시·부스 토큰·페어링 교환은 토큰 없이 열리고 도메인 오류는 Problem 본문이다")
     void publicEndpoints() throws Exception {
@@ -321,6 +333,7 @@ class SecurityRulesTest {
 
     // [상황] 위 공개 주소들에 만료된 토큰이 붙어 온다(브라우저에 남은 옛 토큰).
     // [기대] 토큰 만료(401) 대신 그 기능의 결과를 그대로 준다.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("공개 경로는 만료된 Bearer가 붙어 와도 401 UNAUTHENTICATED가 아니라 도메인 결과를 낸다")
     void publicEndpointsIgnoreStaleBearer() throws Exception {

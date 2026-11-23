@@ -119,6 +119,7 @@ class SocialLoginControllerTest {
 
     // [상황] 지원하지 않는 페이스북으로 시작한다.
     // [기대] 404.
+    //        ※ 응답 코드: 404 = 찾을 수 없음(없는 주소나 데이터)
     @Test
     @DisplayName("모르는 제공자 이름은 404")
     void unknownProviderIs404() throws Exception {

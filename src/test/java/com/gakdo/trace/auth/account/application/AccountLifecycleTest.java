@@ -120,6 +120,7 @@ class AccountLifecycleTest {
 
     // [상황] 개인정보 동의 없이 가입하고, 이미 가입한 이메일로 다시 가입한다.
     // [기대] 동의 없음 400 CONSENT_REQUIRED, 중복 이메일 409.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음, 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("동의 없이 가입하면 400 CONSENT_REQUIRED, 같은 이메일로 다시 가입하면 409다")
     void consentAndDuplicate() {
@@ -132,6 +133,7 @@ class AccountLifecycleTest {
 
     // [상황] 인증 코드를 5번 틀린 뒤 맞는 코드를 넣는다. 다른 경우에는 10분이 지난 뒤 넣는다.
     // [기대] 5번 틀리면 코드가 폐기되어 맞는 코드도 410, 10분이 지나도 410(코드 맞히기 방지).
+    //        ※ 응답 코드: 410 = 이미 쓰였거나 만료되어 더는 쓸 수 없음
     @Test
     @DisplayName("코드를 5번 틀리면 폐기되어 맞는 코드도 410이고, 10분이 지나도 410이다")
     void attemptsAndExpiry() {
@@ -153,6 +155,7 @@ class AccountLifecycleTest {
 
     // [상황] 인증 메일을 다시 보내 달라고 하고, 60초 안에 또 요청한다.
     // [기대] 다시 보내면 앞 코드는 못 쓰고 새 코드만 된다. 60초 안 재요청은 429 RESEND_TOO_SOON.
+    //        ※ 응답 코드: 429 = 요청이 너무 잦아 잠시 막음
     @Test
     @DisplayName("재발송하면 앞 코드는 쓸 수 없고, 60초 안 재발송은 429 RESEND_TOO_SOON이다")
     void resendReplacesAndThrottles() {
@@ -213,6 +216,7 @@ class AccountLifecycleTest {
 
     // [상황] 고객이 비밀번호를 넣고 탈퇴한다. 틀린 비밀번호로도 해 본다.
     // [기대] 이메일·이름·비밀번호가 지워지고 WITHDRAWN 상태가 된다. 틀린 비밀번호면 401.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("탈퇴하면 이메일·이름·비밀번호가 지워지고 WITHDRAWN이 되며, 비밀번호가 틀리면 401이다")
     void withdrawAccount() {
@@ -248,6 +252,7 @@ class AccountLifecycleTest {
 
     // [상황] 같은 소셜 고객이 로그인한 지 10분이 지났거나 로그인 시각을 모르는 상태로 탈퇴한다.
     // [기대] 403 REAUTH_REQUIRED(다시 로그인하세요), 탈퇴되지 않는다(남이 켜 둔 화면으로 탈퇴 방지).
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("비밀번호 없는 탈퇴는 로그인한 지 10분이 지났거나 로그인 시각을 모르면 403 REAUTH_REQUIRED이고 탈퇴되지 않는다")
     void passwordlessWithdrawNeedsRecentLogin() {
@@ -263,6 +268,7 @@ class AccountLifecycleTest {
 
     // [상황] 비밀번호로 가입한 고객(소셜도 연결됨)이 비밀번호 없이 탈퇴하려 한다.
     // [기대] 401, 탈퇴되지 않는다.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("비밀번호를 정한 계정은 소셜이 자동 연결돼 있어도 비밀번호를 빼면 401이고 탈퇴되지 않는다")
     void passwordAccountNeedsPassword() {

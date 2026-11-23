@@ -32,6 +32,7 @@ import com.gakdo.trace.auth.common.infra.Sha256;
 import com.gakdo.trace.auth.support.IntegrationTestBase;
 
 /** AU2 수용 기준을 실제 PostgreSQL(auth.email_token)·Redis로: 가입 → 인증 전 로그인 403 → 인증 → 로그인 → 탈퇴. */
+// ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
 @AutoConfigureMockMvc
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
 class AccountFlowIntegrationTest extends IntegrationTestBase {
@@ -50,6 +51,7 @@ class AccountFlowIntegrationTest extends IntegrationTestBase {
     // [상황] 가입 → 인증 전 로그인 → 메일 코드로 인증 → 로그인 → 탈퇴 → 다시 로그인 순서로 진행한다.
     // [기대] DB에는 인증 코드 해시만 저장된다. 인증 전 로그인은 403 EMAIL_NOT_VERIFIED, 인증 뒤엔 로그인된다.
     //        탈퇴하면 이메일·이름·비밀번호가 DB에서 지워지고(WITHDRAWN), 같은 정보로 다시 로그인하면 401.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일), 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("가입하면 코드 해시만 저장되고, 인증 전 로그인은 403, 인증 뒤 로그인되며, 탈퇴하면 개인정보가 DB에 남지 않는다")
     void signupVerifyLoginWithdraw() throws Exception {
