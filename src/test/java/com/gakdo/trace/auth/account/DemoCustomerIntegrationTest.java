@@ -27,7 +27,16 @@ import com.gakdo.trace.auth.account.application.InitialDataLoader;
 import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.support.IntegrationTestBase;
 
-/** 시연용 고객 계정이 실제 DB(Flyway auth 스키마)에 만들어지고 로그인되는지 확인한다. */
+/**
+ * 시연(대회 발표)용 고객 계정이 실제 DB(Flyway auth 스키마)에 만들어지고 로그인되는지 확인한다.
+ *
+ * <p>확인하는 흐름: 환경 변수로 이메일·비밀번호를 주고 서버 시작 → 그 계정으로 로그인하면 CUSTOMER 토큰 →
+ * 서버를 두 번 시작해도 계정은 하나. 이메일·비밀번호는 실행할 때마다 새로 만든 값이다.
+ *
+ * <p>실행 조건: 진짜 PostgreSQL·Redis가 필요하다(바탕 클래스 IntegrationTestBase).
+ * GitHub Actions는 Docker(Testcontainers)로 띄우고, Docker가 없으면 {@code TRACE_IT_LOCAL=1}일 때 로컬 테스트 전용 DB
+ * trace_it·Redis DB 15에 붙는다. 둘 다 없으면 이 클래스 전체를 건너뛴다(실패가 아님).
+ */
 @AutoConfigureMockMvc
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
 class DemoCustomerIntegrationTest extends IntegrationTestBase {
