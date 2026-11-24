@@ -47,7 +47,17 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 
 import jakarta.servlet.http.Cookie;
 
-/** AU1 수용 기준을 실제 PostgreSQL(Flyway auth 스키마)·Redis로 확인한다. */
+/**
+ * AU1(로그인·토큰 발급) 수용 기준을 실제 PostgreSQL(Flyway auth 스키마)·Redis로 확인한다.
+ *
+ * <p>확인하는 흐름: 관리자 로그인 → 리프레시로 다시 받기·로그아웃 → 틀린 비밀번호·인증 전 고객 거절 →
+ * 진단 에이전트 페어링 코드 → AGENT 토큰, 부스 자격 → BOOTH 토큰, 고객 QR → 촬영 토큰 →
+ * 발급한 토큰을 JWKS 공개키로 검증.
+ *
+ * <p>실행 조건: 진짜 PostgreSQL·Redis가 필요하다(바탕 클래스 IntegrationTestBase).
+ * GitHub Actions는 Docker(Testcontainers)로 띄우고, Docker가 없으면 {@code TRACE_IT_LOCAL=1}일 때 로컬 테스트 전용 DB
+ * trace_it·Redis DB 15에 붙는다. 둘 다 없으면 이 클래스 전체를 건너뛴다(실패가 아님).
+ */
 @AutoConfigureMockMvc
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
 class AuthFlowIntegrationTest extends IntegrationTestBase {

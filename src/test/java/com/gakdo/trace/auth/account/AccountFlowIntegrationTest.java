@@ -31,7 +31,16 @@ import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.common.infra.Sha256;
 import com.gakdo.trace.auth.support.IntegrationTestBase;
 
-/** AU2 수용 기준을 실제 PostgreSQL(auth.email_token)·Redis로: 가입 → 인증 전 로그인 403 → 인증 → 로그인 → 탈퇴. */
+/**
+ * AU2(회원 가입·탈퇴) 수용 기준을 실제 PostgreSQL(auth.email_token 표)·Redis로 확인한다.
+ *
+ * <p>확인하는 흐름: 가입(메일 인증 코드는 해시만 저장) → 인증 전 로그인은 403(권한 없음) → 코드로 인증 → 로그인 →
+ * 탈퇴하면 개인정보가 지워짐.
+ *
+ * <p>실행 조건: 진짜 PostgreSQL·Redis가 필요하다(바탕 클래스 IntegrationTestBase).
+ * GitHub Actions는 Docker(Testcontainers)로 띄우고, Docker가 없으면 {@code TRACE_IT_LOCAL=1}일 때 로컬 테스트 전용 DB
+ * trace_it·Redis DB 15에 붙는다. 둘 다 없으면 이 클래스 전체를 건너뛴다(실패가 아님).
+ */
 // ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
 @AutoConfigureMockMvc
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
