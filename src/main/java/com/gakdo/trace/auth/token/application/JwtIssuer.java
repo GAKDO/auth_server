@@ -19,7 +19,7 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
-/** RS256 JWT를 만든다. 클레임은 iss·sub·role·scope·rentals·rentalId·deviceSerial·iat·exp·jti(contracts common.yaml bearerJwt). */
+/** RS256 JWT를 만든다. 클레임은 iss·sub·role·scope·rentals·rentalId·deviceSerial·auth_time·iat·exp·jti(contracts common.yaml bearerJwt). */
 @Component
 public class JwtIssuer {
 
@@ -57,6 +57,9 @@ public class JwtIssuer {
         }
         if (claims.rentalId() != null) {
             builder.claim("rentalId", claims.rentalId());
+        }
+        if (claims.authTime() != null) {
+            builder.claim("auth_time", claims.authTime().getEpochSecond());
         }
         if (claims.deviceSerial() != null) {
             builder.claim("deviceSerial", claims.deviceSerial());

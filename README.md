@@ -57,7 +57,7 @@ curl http://localhost:8080/api/v1/auth/ping
 ./mvnw verify
 ```
 
-줄 커버리지 40% 미만이면 실패합니다(블로그와 같은 기준). 통합 테스트(`AuthFlowIntegrationTest`)는 Docker가 있으면 Testcontainers로 돌고, Docker가 없는 환경에서는 `TRACE_IT_LOCAL=1`이면 로컬 PostgreSQL의 테스트 전용 DB(`localhost:5432/trace_it`, 사용자 postgres, 먼저 `createdb -U postgres trace_it`)·Redis(`localhost:6379`, DB 15)에 붙습니다. 개발 DB `trace`는 건드리지 않습니다. 둘 다 없으면 건너뜁니다.
+줄 커버리지 40% 미만이면 실패합니다(블로그와 같은 기준). 통합 테스트(`AuthFlowIntegrationTest`·`AccountFlowIntegrationTest`·`DemoCustomerIntegrationTest`·`ReceiptIntegrationTest`)는 Docker가 있으면 Testcontainers로 돌고, Docker가 없는 환경에서는 `TRACE_IT_LOCAL=1`이면 로컬 PostgreSQL의 테스트 전용 DB(`localhost:5432/trace_it`, 사용자 postgres, 먼저 `createdb -U postgres trace_it`)·Redis(`localhost:6379`, DB 15)에 붙습니다. 개발 DB `trace`는 건드리지 않습니다. 둘 다 없으면 건너뜁니다(실패가 아님). 나머지 단위·컨트롤러 테스트는 Docker 없이 늘 돕니다. 테스트마다 한국어 이름(`@DisplayName` 또는 한국어 메서드 이름)과 `[상황]`·`[기대]` 주석이 달려 있습니다.
 
 ## CI/CD
 

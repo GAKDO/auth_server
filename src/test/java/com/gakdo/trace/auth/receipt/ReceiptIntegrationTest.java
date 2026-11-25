@@ -1,3 +1,7 @@
+// 이 파일이 확인하는 것: 요구사항 AU3(봉인 영수증 메일)을 진짜 DB로 확인.
+// 출고 때는 아직 고객 계정과 렌탈이 연결되지 않았을 수 있다(고객은 수령 때 QR로 연결).
+// 그래서 연결 전 봉인은 보관해 두었다가, 연결되는 순간 한 번에 보낸다. 메일은 가짜로 바꿔 보낸 횟수만 센다.
+
 package com.gakdo.trace.auth.receipt;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +32,16 @@ import com.gakdo.trace.auth.receipt.application.ReceiptService;
 import com.gakdo.trace.auth.receipt.infra.RecordSealedListener;
 import com.gakdo.trace.auth.support.IntegrationTestBase;
 
-/** AU3 수용 기준을 실제 PostgreSQL(auth.seal_receipt)로: 연결 전 봉인은 남겨 두고, 연결되면 한 번만 보낸다. */
+/**
+ * AU3(봉인 영수증 메일) 수용 기준을 실제 PostgreSQL(auth.seal_receipt 표)로 확인한다.
+ *
+ * <p>확인하는 흐름: 출고 검사가 봉인됨(아직 고객 계정과 렌탈이 연결 전) → 메일을 보내지 않고 보관 →
+ * 고객이 수령 때 QR로 렌탈을 연결 → 그때 한 번만 보냄(다시 연결해도 또 보내지 않음). 메일 발송은 가짜로 바꿔 횟수만 센다.
+ *
+ * <p>실행 조건: 진짜 PostgreSQL·Redis가 필요하다(바탕 클래스 IntegrationTestBase).
+ * GitHub Actions는 Docker(Testcontainers)로 띄우고, Docker가 없으면 {@code TRACE_IT_LOCAL=1}일 때 로컬 테스트 전용 DB
+ * trace_it·Redis DB 15에 붙는다. 둘 다 없으면 이 클래스 전체를 건너뛴다(실패가 아님).
+ */
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
 class ReceiptIntegrationTest extends IntegrationTestBase {
 
@@ -49,6 +62,9 @@ class ReceiptIntegrationTest extends IntegrationTestBase {
     @MockitoBean
     ReceiptMailer mailer;
 
+    // [상황] 출고 봉인 이벤트가 두 번(중복) 온다 → 고객이 QR로 렌탈을 연결 → 수령 봉인 이벤트 → 연결 처리 한 번 더.
+    // [기대] 연결 전에는 보내지 않고 기록만 해 둔다(중복 이벤트는 무시). 연결되면 출고 영수증 1통.
+    //        수령 봉인은 바로 1통(총 2통). 연결 처리를 또 해도 더 보내지 않는다.
     @Test
     @DisplayName("고객 연결 전 봉인은 보내지 않고 남겨 두었다가, 수령 때 렌탈이 연결되면 한 번만 보낸다")
     void pendingUntilLinkedThenOnce() {

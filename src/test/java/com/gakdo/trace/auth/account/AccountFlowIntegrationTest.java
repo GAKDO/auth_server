@@ -1,3 +1,5 @@
+// 이 파일이 확인하는 것: 요구사항 AU2(회원 가입·탈퇴) 흐름을 진짜 DB·Redis로 한 번에 확인.
+
 package com.gakdo.trace.auth.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,7 +31,17 @@ import com.gakdo.trace.auth.common.infra.NanoId;
 import com.gakdo.trace.auth.common.infra.Sha256;
 import com.gakdo.trace.auth.support.IntegrationTestBase;
 
-/** AU2 수용 기준을 실제 PostgreSQL(auth.email_token)·Redis로: 가입 → 인증 전 로그인 403 → 인증 → 로그인 → 탈퇴. */
+/**
+ * AU2(회원 가입·탈퇴) 수용 기준을 실제 PostgreSQL(auth.email_token 표)·Redis로 확인한다.
+ *
+ * <p>확인하는 흐름: 가입(메일 인증 코드는 해시만 저장) → 인증 전 로그인은 403(권한 없음) → 코드로 인증 → 로그인 →
+ * 탈퇴하면 개인정보가 지워짐.
+ *
+ * <p>실행 조건: 진짜 PostgreSQL·Redis가 필요하다(바탕 클래스 IntegrationTestBase).
+ * GitHub Actions는 Docker(Testcontainers)로 띄우고, Docker가 없으면 {@code TRACE_IT_LOCAL=1}일 때 로컬 테스트 전용 DB
+ * trace_it·Redis DB 15에 붙는다. 둘 다 없으면 이 클래스 전체를 건너뛴다(실패가 아님).
+ */
+// ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
 @AutoConfigureMockMvc
 @EnabledIf("com.gakdo.trace.auth.support.IntegrationTestBase#infrastructureAvailable")
 class AccountFlowIntegrationTest extends IntegrationTestBase {
@@ -45,6 +57,10 @@ class AccountFlowIntegrationTest extends IntegrationTestBase {
     @MockitoBean
     CodeMailer mailer;
 
+    // [상황] 가입 → 인증 전 로그인 → 메일 코드로 인증 → 로그인 → 탈퇴 → 다시 로그인 순서로 진행한다.
+    // [기대] DB에는 인증 코드 해시만 저장된다. 인증 전 로그인은 403 EMAIL_NOT_VERIFIED, 인증 뒤엔 로그인된다.
+    //        탈퇴하면 이메일·이름·비밀번호가 DB에서 지워지고(WITHDRAWN), 같은 정보로 다시 로그인하면 401.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일), 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("가입하면 코드 해시만 저장되고, 인증 전 로그인은 403, 인증 뒤 로그인되며, 탈퇴하면 개인정보가 DB에 남지 않는다")
     void signupVerifyLoginWithdraw() throws Exception {

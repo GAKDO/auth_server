@@ -64,7 +64,7 @@ public class SocialLoginService {
         if (account.getStatus() == AccountStatus.PENDING) {
             // 메일 인증 전 계정의 비밀번호는 이메일 주인이 정했다고 볼 수 없다(남이 먼저 가입했을 수 있음).
             // 아무도 모르는 난수로 바꿔 그 비밀번호로는 로그인하지 못하게 한다. 비밀번호 재설정으로 새로 정할 수 있다.
-            account.changePassword(unusablePassword(), now);
+            account.replaceWithUnusablePassword(unusablePassword(), now);
         }
         // 제공자가 인증한 이메일이므로 메일 인증 전(PENDING) 계정도 인증을 끝낸다
         account.verifyEmail(now);
@@ -101,8 +101,10 @@ public class SocialLoginService {
      * 로그인 화면의 "처음 로그인하면 개인정보 수집·이용에 동의" 안내를 동의로 보고 지금 시각을 남긴다.
      */
     private Account createCustomer(SocialProfile profile, String email, Instant now) {
-        Account account = Account.customer(NanoId.next(), email, unusablePassword(), displayName(profile, email),
+        String unusable = unusablePassword();
+        Account account = Account.customer(NanoId.next(), email, unusable, displayName(profile, email),
                 AccountStatus.ACTIVE, now);
+        account.replaceWithUnusablePassword(unusable, now);
         return accounts.saveAndFlush(account);
     }
 

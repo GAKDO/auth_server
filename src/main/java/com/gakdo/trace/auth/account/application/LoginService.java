@@ -1,5 +1,7 @@
 package com.gakdo.trace.auth.account.application;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,8 +17,11 @@ import com.gakdo.trace.auth.account.domain.RentalAccessRepository;
 import com.gakdo.trace.auth.common.domain.AuthException;
 import com.gakdo.trace.auth.common.domain.ErrorCode;
 import com.gakdo.trace.auth.config.AuthProperties;
+import com.gakdo.trace.auth.social.domain.SocialIdentity;
+import com.gakdo.trace.auth.social.domain.SocialIdentityRepository;
 import com.gakdo.trace.auth.token.application.JwtIssuer;
 import com.gakdo.trace.auth.token.domain.IssuedToken;
+import com.gakdo.trace.auth.token.domain.RefreshGrant;
 import com.gakdo.trace.auth.token.domain.TokenClaims;
 import com.gakdo.trace.auth.token.infra.RefreshTokenStore;
 
@@ -30,18 +35,22 @@ public class LoginService {
     private final RefreshTokenStore refreshTokens;
     private final JwtIssuer jwtIssuer;
     private final AuthProperties properties;
+    private final SocialIdentityRepository socialIdentities;
+    private final Clock clock;
     // 없는 이메일에도 BCrypt 비교를 한 번 해서 응답 시간으로 가입 여부가 드러나지 않게 한다
     private final String dummyHash;
 
     public LoginService(AccountRepository accounts, RentalAccessRepository rentalAccesses,
                         PasswordEncoder passwordEncoder, RefreshTokenStore refreshTokens, JwtIssuer jwtIssuer,
-                        AuthProperties properties) {
+                        AuthProperties properties, SocialIdentityRepository socialIdentities, Clock clock) {
         this.accounts = accounts;
         this.rentalAccesses = rentalAccesses;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokens = refreshTokens;
         this.jwtIssuer = jwtIssuer;
         this.properties = properties;
+        this.socialIdentities = socialIdentities;
+        this.clock = clock;
         this.dummyHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
     }
 
@@ -68,12 +77,13 @@ public class LoginService {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new AuthException(ErrorCode.REFRESH_INVALID);
         }
-        String accountId = refreshTokens.consume(refreshToken)
+        RefreshGrant grant = refreshTokens.consume(refreshToken)
                 .orElseThrow(() -> new AuthException(ErrorCode.REFRESH_INVALID));
-        Account account = accounts.findByPublicId(accountId)
+        Account account = accounts.findByPublicId(grant.accountId())
                 .filter(a -> a.getStatus() == AccountStatus.ACTIVE)
                 .orElseThrow(() -> new AuthException(ErrorCode.REFRESH_INVALID));
-        return issueFor(account);
+        // 재발급은 로그인이 아니므로 처음 로그인 시각을 이어 간다(옛 토큰은 모름 = null)
+        return issueFor(account, grant.authTime());
     }
 
     public void logout(String refreshToken) {
@@ -88,16 +98,27 @@ public class LoginService {
                 .filter(a -> a.getStatus() != AccountStatus.WITHDRAWN)
                 .orElseThrow(() -> new AuthException(ErrorCode.UNAUTHENTICATED));
         return new MeView(account.getPublicId(), account.getEmail(), account.getName(), account.getRole(),
-                account.getStatus(), rentalsOf(account));
+                account.getStatus(), rentalsOf(account), socialProvidersOf(account), account.isPasswordSet());
     }
 
-    /** 이미 확인한 계정에 액세스·리프레시 토큰을 낸다(비밀번호 로그인·소셜 로그인이 같이 쓴다). */
+    /** 연결된 소셜 로그인 제공자(contracts AuthSocialProvider 값, 이름순). */
+    private List<String> socialProvidersOf(Account account) {
+        return socialIdentities.findByAccountId(account.getId()).stream()
+                .map(SocialIdentity::getProvider).map(Enum::name).sorted().toList();
+    }
+
+    /** 이미 확인한 계정에 액세스·리프레시 토큰을 낸다(비밀번호 로그인·소셜 로그인이 같이 쓴다). 지금이 로그인 시각이다. */
     public LoginResult issueFor(Account account) {
-        TokenClaims claims = account.getRole() == AccountRole.ADMIN
+        return issueFor(account, clock.instant());
+    }
+
+    private LoginResult issueFor(Account account, Instant authTime) {
+        TokenClaims claims = (account.getRole() == AccountRole.ADMIN
                 ? TokenClaims.admin(account.getPublicId(), properties.accessTokenTtl())
-                : TokenClaims.customer(account.getPublicId(), rentalsOf(account), properties.accessTokenTtl());
+                : TokenClaims.customer(account.getPublicId(), rentalsOf(account), properties.accessTokenTtl()))
+                .withAuthTime(authTime);
         IssuedToken access = jwtIssuer.issue(claims);
-        String refresh = refreshTokens.issue(account.getPublicId());
+        String refresh = refreshTokens.issue(account.getPublicId(), authTime);
         return new LoginResult(access, refresh, account.getRole());
     }
 

@@ -1,5 +1,7 @@
 package com.gakdo.trace.auth.account.api;
 
+import java.time.Instant;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -64,7 +66,19 @@ public class AccountController {
 
     @DeleteMapping("/me")
     public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody WithdrawRequest request) {
-        withdrawService.withdraw(jwt.getSubject(), request.password());
+        withdrawService.withdraw(jwt.getSubject(), request.password(), authTimeOf(jwt));
         return ResponseEntity.noContent().build();
+    }
+
+    /** 로그인 시각(auth_time, 초). 없거나 숫자가 아니면 모르는 것으로 본다. */
+    private static Instant authTimeOf(Jwt jwt) {
+        Object value = jwt.getClaim("auth_time");
+        if (value instanceof Number number) {
+            return Instant.ofEpochSecond(number.longValue());
+        }
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        return null;
     }
 }

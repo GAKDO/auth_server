@@ -1,3 +1,7 @@
+// 이 파일이 확인하는 것: 소셜 로그인(구글·깃허브·카카오·네이버) 시작·콜백 주소의 동작.
+// 흐름: 로그인 화면에서 버튼 → 시작 주소가 제공자 로그인 화면으로 보냄 → 제공자가 콜백 주소로 돌려보냄 → 로그인 완료.
+// 여기서는 구글·깃허브만 키가 설정된 상태로 시험한다(설정 값은 테스트용 가짜).
+
 package com.gakdo.trace.auth.social;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +61,8 @@ class SocialLoginControllerTest {
     @MockitoBean
     SocialLoginService loginService;
 
+    // [상황] 로그인 화면이 쓸 수 있는 소셜 로그인 목록을 묻는다.
+    // [기대] 키가 설정된 구글·깃허브만 나온다(카카오·네이버 버튼은 숨김).
     @Test
     @DisplayName("키가 설정된 제공자만 목록에 나온다")
     void listsOnlyConfiguredProviders() throws Exception {
@@ -65,6 +71,9 @@ class SocialLoginControllerTest {
                 .andExpect(jsonPath("$.providers").value(org.hamcrest.Matchers.contains("GOOGLE", "GITHUB")));
     }
 
+    // [상황] 깃허브 로그인을 시작한다(끝나면 /rentals/r1로 돌아가고 싶음).
+    // [기대] 깃허브 로그인 화면으로 보내며 앱 ID·콜백 주소·state(위조 방지 값)·이메일 읽기 권한을 붙인다.
+    //        비밀 키는 주소에 넣지 않는다. 같은 state를 쿠키로도 심어 둔다.
     @Test
     @DisplayName("시작하면 state 쿠키를 심고 GitHub 인증 화면으로 콜백 주소·이메일 권한과 함께 보낸다")
     void startRedirectsToProvider() throws Exception {
@@ -86,6 +95,8 @@ class SocialLoginControllerTest {
                 .contains("Path=/api/v1/auth/oauth");
     }
 
+    // [상황] 끝나고 돌아갈 주소로 사이트 밖 주소(//evil.example)를 준다.
+    // [기대] 그 주소는 버리고 시작한다(로그인 뒤 피싱 사이트로 보내는 공격 방지).
     @Test
     @DisplayName("사이트 밖 주소를 next로 주면 버리고 시작한다")
     void dropsExternalNext() throws Exception {
@@ -95,6 +106,8 @@ class SocialLoginControllerTest {
         verify(states).issue(SocialProvider.GOOGLE, "");
     }
 
+    // [상황] 키가 없는 카카오로 로그인을 시작한다.
+    // [기대] 로그인 화면으로 돌려보내며 "지금 쓸 수 없음(UNAVAILABLE)"을 알린다.
     @Test
     @DisplayName("키가 없는 제공자로 시작하면 로그인 화면으로 UNAVAILABLE을 실어 돌려보낸다")
     void unconfiguredProviderIsUnavailable() throws Exception {
@@ -104,12 +117,18 @@ class SocialLoginControllerTest {
         verify(states, never()).issue(any(), any());
     }
 
+    // [상황] 지원하지 않는 페이스북으로 시작한다.
+    // [기대] 404.
+    //        ※ 응답 코드: 404 = 찾을 수 없음(없는 주소나 데이터)
     @Test
     @DisplayName("모르는 제공자 이름은 404")
     void unknownProviderIs404() throws Exception {
         mvc.perform(get("/api/v1/auth/oauth/facebook/start")).andExpect(status().isNotFound());
     }
 
+    // [상황] 깃허브 로그인을 마치고 콜백으로 돌아온다(state 쿠키 일치).
+    // [기대] 로그인 유지용 리프레시 쿠키를 심고, 처음 원했던 /rentals/r1로 이어지게 로그인 화면으로 보낸다.
+    //        다 쓴 state 쿠키는 지운다.
     @Test
     @DisplayName("콜백이 성공하면 리프레시 쿠키를 심고 시작할 때의 next로 로그인 화면에 돌려보낸다")
     void callbackSetsRefreshCookie() throws Exception {
@@ -133,6 +152,8 @@ class SocialLoginControllerTest {
                 .anySatisfy(c -> assertThat(c).startsWith("trace_oauth_state=").contains("Max-Age=0"));
     }
 
+    // [상황] state 쿠키가 다르거나 없다(다른 브라우저에서 시작했거나 위조된 콜백).
+    // [기대] 제공자에게 묻지도 않고 STATE_INVALID로 로그인 화면에 돌려보낸다.
     @Test
     @DisplayName("state 쿠키가 없거나 다르면(다른 브라우저에서 시작) 제공자를 부르지 않고 STATE_INVALID")
     void callbackRejectsForeignState() throws Exception {
@@ -145,6 +166,8 @@ class SocialLoginControllerTest {
         verify(providerClient, never()).fetchProfile(any(), anyString(), anyString(), anyString());
     }
 
+    // [상황] 고객이 구글 로그인 화면에서 "취소"를 눌렀다.
+    // [기대] CANCELLED로 로그인 화면에 돌려보낸다.
     @Test
     @DisplayName("사용자가 제공자 화면에서 취소하면 CANCELLED")
     void callbackCancelled() throws Exception {
@@ -155,6 +178,8 @@ class SocialLoginControllerTest {
                 .andExpect(header().string("Location", "https://gakdo.site/login?socialError=CANCELLED"));
     }
 
+    // [상황] 깃허브에서 인증된 이메일을 받지 못했다.
+    // [기대] EMAIL_REQUIRED로 돌려보내고 로그인 쿠키는 심지 않는다(TRACE는 이메일이 꼭 필요).
     @Test
     @DisplayName("인증된 이메일이 없으면 EMAIL_REQUIRED로 돌려보내고 쿠키를 심지 않는다")
     void callbackEmailRequired() throws Exception {

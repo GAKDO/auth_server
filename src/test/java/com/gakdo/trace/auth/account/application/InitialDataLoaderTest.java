@@ -1,3 +1,5 @@
+// 이 파일이 확인하는 것: 시연용 고객 계정 초기 데이터(DEMO_CUSTOMER_EMAIL·DEMO_CUSTOMER_PASSWORD) 규칙을 DB 없이 확인.
+
 package com.gakdo.trace.auth.account.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +43,8 @@ class InitialDataLoaderTest {
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
+    // [상황] 시연용 이메일(앞뒤 공백·대문자 섞임)과 비밀번호를 설정하고 서버를 켠다.
+    // [기대] 이메일을 소문자로 정리해 인증 끝난 CUSTOMER 계정을 만든다. 비밀번호는 해시로만 저장하고 로그에 남기지 않는다.
     @Test
     @DisplayName("값이 있으면 시작할 때 이메일 인증을 마친 CUSTOMER 계정을 만들고 비밀번호는 해시로만 저장한다")
     void createsVerifiedCustomer(CapturedOutput output) {
@@ -60,6 +64,8 @@ class InitialDataLoaderTest {
         assertThat(output).doesNotContain(PASSWORD);
     }
 
+    // [상황] 설정이 없거나, 비밀번호가 비었거나, 이메일이 공백이다.
+    // [기대] 계정을 만들지 않는다.
     @Test
     @DisplayName("값이 없으면 시연용 고객 계정을 만들지 않는다")
     void skipsWhenNotConfigured() {
@@ -70,6 +76,8 @@ class InitialDataLoaderTest {
         verify(accounts, never()).save(any());
     }
 
+    // [상황] 같은 이메일 계정이 이미 있다.
+    // [기대] 건드리지 않는다(재시작 때 고객이 바꾼 비밀번호를 덮어쓰지 않음).
     @Test
     @DisplayName("같은 이메일 계정이 이미 있으면 건드리지 않는다(비밀번호를 덮어쓰지 않음)")
     void keepsExistingAccount() {
